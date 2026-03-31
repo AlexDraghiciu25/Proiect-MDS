@@ -6,7 +6,7 @@
 
 ## 🛠 Tehnologii Utilizate (Stack Tehnologic)
 * **Backend:** Python 3.x cu framework-ul **Django**.
-* **Bază de date:** **MySQL** (pentru persistența utilizatorilor, istoricului și rapoartelor).
+* **Bază de date:** **PostgreSQL** (pentru persistența utilizatorilor, istoricului și rapoartelor).
 * **Frontend:** Django Templates + Bootstrap.
 * **AI/ML:** OpenAI API (GPT-4) / LangChain pentru coordonarea agenților.
 * **Geospatial:** Google Maps Platform API / OpenStreetMap.
@@ -21,7 +21,7 @@ Sistemul este structurat pe patru straturi logice:
 1.  **Ingestion Layer:** Modulul de Web Scraping care extrage datele brute din link-uri externe.
 2.  **AI Analysis Layer:** * **Detective Agent:** Validare integritate, detecție "red flags", analiză anomalii de preț.
     * **Oracle Agent:** Calcul scor proximitate, validare distanțe reale, analiză facilități zonale.
-3.  **Persistence Layer:** Baza de date MySQL pentru stocarea profilurilor și a rapoartelor.
+3.  **Persistence Layer:** Baza de date PostgreSQL pentru stocarea profilurilor și a rapoartelor.
 4.  **Presentation Layer:** Dashboard-ul web pentru vizualizarea scorului de onestitate.
 
 ---
@@ -29,7 +29,7 @@ Sistemul este structurat pe patru straturi logice:
 ## 📋 Backlog de Dezvoltare (Sprint-uri)
 
 ### 🔹 Sprint 1: Setup & Core
-- [✓] Configurare proiect Django și conectare la instanța MySQL.
+- [✓] Configurare proiect Django și conectare la instanța PostgreSQL.
 - [ ] Definirea Modelelor (User, Report, Listing).
 - [ ] Implementare sistem de autentificare (Login/Register).
 
