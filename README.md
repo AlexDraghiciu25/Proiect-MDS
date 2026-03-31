@@ -30,7 +30,7 @@ Sistemul este structurat pe patru straturi logice:
 
 ### 🔹 Sprint 1: Setup & Core
 - [✓] Configurare proiect Django și conectare la instanța PostgreSQL.
-- [ ] Definirea Modelelor (User, Report, Listing).
+- [✓] Definirea Modelelor (User, Report, Listing).
 - [ ] Implementare sistem de autentificare (Login/Register).
 
 ### 🔹 Sprint 2: Data & Scraper
