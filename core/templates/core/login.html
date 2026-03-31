@@ -1,0 +1,7 @@
+<h2>Autentificare RentGuru</h2>
+<form method="POST">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Loghează-te</button>
+</form>
+<p>Nu ai cont? <a href="{% url 'register' %}">Creează unul aici</a></p>

@@ -1,0 +1,12 @@
+<h2>Salut, {{ user.username|default:"Vizitator" }}!</h2>
+
+{% if user.is_authenticated %}
+    <p>Ești logat cu succes în sistemul RentGuru.</p>
+    <form action="{% url 'logout' %}" method="POST">
+        {% csrf_token %}
+        <button type="submit">Delogare</button>
+    </form>
+{% else %}
+    <p>Nu ești logat.</p>
+    <a href="{% url 'login' %}">Logare</a> | <a href="{% url 'register' %}">Înregistrare</a>
+{% endif %}

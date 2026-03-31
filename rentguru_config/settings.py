@@ -76,9 +76,9 @@ WSGI_APPLICATION = 'rentguru_config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'rentguru_db',
+        'NAME': 'RENTGURU',
         'USER': 'postgres',
-        'PASSWORD': 'tudorita41',
+        'PASSWORD': 'alex1234',
         'HOST': 'localhost',
         'PORT': '5432',
     }
