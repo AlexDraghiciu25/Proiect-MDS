@@ -29,7 +29,7 @@ Sistemul este structurat pe patru straturi logice:
 ## 📋 Backlog de Dezvoltare (Sprint-uri)
 
 ### 🔹 Sprint 1: Setup & Core
-- [ ] Configurare proiect Django și conectare la instanța MySQL.
+- [✓] Configurare proiect Django și conectare la instanța MySQL.
 - [ ] Definirea Modelelor (User, Report, Listing).
 - [ ] Implementare sistem de autentificare (Login/Register).
 
