@@ -3,6 +3,9 @@ from django.contrib.auth import login, authenticate, logout
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib import messages
 
+from .services import DetectiveAgent
+from .models import Listing
+
 # 1. Funcția de Înregistrare
 def register_view(request):
     if request.method == 'POST':
@@ -39,3 +42,20 @@ def logout_view(request):
 # 4. O pagină principală (temporară, ca să avem unde să fim redirecționați)
 def home_view(request):
     return render(request, 'core/home.html')
+
+# 5. NOUA FUNCȚIE PENTRU DETECTIVE AGENT 
+def run_analysis_view(request, listing_id):
+    # Verificăm dacă utilizatorul este logat înainte de a rula AI-ul
+    if not request.user.is_authenticated:
+        return redirect('login')
+    
+    agent = DetectiveAgent()
+    # Rulăm analiza și salvăm rezultatul în tabelul Report din pgAdmin
+    report = agent.analyze_listing(listing_id, request.user)
+    
+    if report:
+        # Trimitem utilizatorul la o pagină unde poate vedea scorul AI
+        return render(request, 'core/report_detail.html', {'report': report})
+    else:
+        messages.error(request, "Analiza AI a eșuat. Verifică conexiunea la API.")
+        return redirect('home')

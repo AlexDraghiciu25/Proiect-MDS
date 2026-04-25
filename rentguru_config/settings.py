@@ -72,7 +72,6 @@ WSGI_APPLICATION = 'rentguru_config.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
-
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -120,3 +119,5 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+# La finalul settings.py
+GEMINI_API_KEY = env('GEMINI_API_KEY')
