@@ -10,7 +10,7 @@
 * **Frontend:** Django Templates + Bootstrap.
 * **AI/ML:** OpenAI API (GPT-4) / LangChain pentru coordonarea agenților.
 * **Geospatial:** Google Maps Platform API / OpenStreetMap.
-* **Data Acquisition:** Beautiful Soup 4 / Selenium (Web Scraping).
+* **Data Acquisition:** Playwright.
 
 ---
 
