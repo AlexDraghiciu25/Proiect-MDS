@@ -1,0 +1,197 @@
+:root {
+    --mds-cream: #F9F6F0;       
+    --mds-brown: #5C4033;       
+    --mds-green: #2D4A22;       
+    --mds-text:  #3E2A1F;       
+    
+    --font-logo: 'Carattere', cursive;
+    --font-body: 'Lora', serif;
+}
+
+::selection {
+    background-color: rgba(45, 74, 34, 0.2); 
+    color: inherit; 
+}
+
+body {
+    background-color: var(--mds-cream);
+    color: var(--mds-text);
+    font-family: var(--font-body);
+    margin: 0;
+}
+
+.navbar-custom {
+    background-color: rgba(249, 246, 240, 0.98);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+}
+
+.navbar-brand {
+    font-family: var(--font-logo);
+    font-size: 2.8rem;
+    color: var(--mds-brown) !important;
+    padding: 0;
+    line-height: 1;
+}
+
+.nav-link {
+    color: var(--mds-text) !important;
+    font-weight: 500;
+    transition: color 0.3s ease;
+}
+
+.nav-link:hover, .nav-link.active {
+    color: var(--mds-green) !important;
+}
+
+.hero-wrapper {
+    background: linear-gradient(rgba(249, 246, 240, 0.85), rgba(249, 246, 240, 1)), url('https://cdn.pixabay.com/photo/2016/11/18/17/46/house-1836070_1280.jpg') center/cover;
+    padding-top: 60px;
+    padding-bottom: 80px;
+    min-height: calc(100vh - 80px); 
+    display: flex;
+    align-items: center;
+}
+
+.hero-title {
+    font-size: 2.8rem;
+    font-weight: 600;
+    color: var(--mds-brown);
+}
+
+.action-card {
+    border: none;
+    border-radius: 20px;
+    background-color: #ffffff;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    height: 100%;
+}
+
+.action-card:hover {
+    box-shadow: 0 15px 40px rgba(45, 74, 34, 0.15); 
+}
+
+.icon-wrapper {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background-color: rgba(45, 74, 34, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.icon-wrapper i {
+    font-size: 1.8rem;
+    color: var(--mds-green);
+}
+
+.form-label {
+    font-weight: 600;
+    color: var(--mds-brown);
+    font-size: 0.95rem;
+}
+
+.form-control, .form-select {
+    border: 1px solid #d4c5b9;
+    padding: 10px 15px;
+    border-radius: 10px;
+    color: var(--mds-text);
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--mds-green);
+    box-shadow: 0 0 0 0.25rem rgba(45, 74, 34, 0.15);
+}
+
+.form-check-input:checked {
+    background-color: var(--mds-green);
+    border-color: var(--mds-green);
+}
+.form-check-input:focus {
+    box-shadow: 0 0 0 0.25rem rgba(45, 74, 34, 0.25);
+}
+
+.btn-map {
+    background-color: #e9ecef;
+    border: 1px solid #d4c5b9;
+    color: var(--mds-brown);
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-map:hover {
+    background-color: #d4c5b9;
+    color: var(--mds-text);
+}
+
+.btn-custom {
+    background-color: var(--mds-green);
+    color: var(--mds-cream);
+    border-radius: 10px;
+    font-weight: 600;
+    padding: 12px 20px;
+    transition: all 0.3s;
+    border: none;
+}
+
+.btn-custom:hover {
+    background-color: #1F3317;
+    color: var(--mds-cream);
+    transform: translateY(-2px);
+}
+
+.footer-custom {
+    background-color: rgba(249, 246, 240, 0.98);
+    border-top: 1px solid #e2dac9;
+    padding: 40px 0 20px 0;
+    margin-top: 60px;
+    color: var(--mds-text);
+}
+
+.footer-brand {
+    font-family: var(--font-logo);
+    font-size: 2.2rem;
+    color: var(--mds-brown);
+    text-decoration: none;
+    line-height: 1;
+}
+
+.social-links {
+    display: flex;
+    gap: 15px;
+}
+
+.social-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: #e2dac9;
+    color: var(--mds-brown);
+    font-size: 1.2rem;
+    transition: all 0.3s ease;
+    text-decoration: none;
+}
+
+.social-icon:hover {
+    transform: translateY(-3px);
+    color: white;
+}
+.social-icon.fb:hover { background-color: #1877F2; }
+.social-icon.ig:hover { background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%); }
+.social-icon.wa:hover { background-color: #25D366; }
+
+.footer-divider {
+    border-color: #d4c5b9;
+    margin: 30px 0 20px 0;
+}
+
+.footer-text {
+    font-size: 0.9rem;
+    color: var(--mds-brown);
+    margin: 0;
+}

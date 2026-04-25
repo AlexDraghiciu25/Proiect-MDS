@@ -1,0 +1,168 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Istoric Căutări - RentGuru</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Carattere&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'css/history.css' %}">
+</head>
+<body>
+
+    <nav class="navbar navbar-expand-lg navbar-custom sticky-top">
+        <div class="container">
+            <a class="navbar-brand" href="{% url 'home' %}">RentGuru</a>
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <i class="bi bi-list fs-2" style="color: var(--mds-brown);"></i>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0 ms-lg-4">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'home' %}"><i class="bi bi-house-door me-1"></i> Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{% url 'history' %}"><i class="bi bi-clock-history me-1"></i> Istoric</a>
+                    </li>
+                    <li class="nav-item ms-lg-2">
+                        <a class="nav-link" href="{% url 'about' %}"><i class="bi bi-info-circle me-1"></i> Despre Noi</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'contact' %}"><i class="bi bi-envelope me-1"></i> Contact</a>
+                    </li>
+                </ul>
+                <div class="d-flex align-items-center mt-3 mt-lg-0">
+                    <span class="me-3 fw-bold" style="color: var(--mds-brown);">Salut, {{ user.username|default:"Oaspete" }}!</span>
+                    <form action="{% url 'logout' %}" method="post" class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
+                            <i class="bi bi-box-arrow-right me-1"></i> Ieși
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <section class="history-hero">
+        <div class="container">
+            <h1 class="history-title">Istoricul Analizelor</h1>
+            <p class="fs-5 mb-0">Reia de unde ai rămas. Toate verificările tale AI, salvate într-un singur loc.</p>
+        </div>
+    </section>
+
+    <section class="history-section">
+        <div class="container">
+            
+            <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+                <h3 class="fw-bold m-0" style="color: var(--mds-brown);">Ultimele căutări</h3>
+                <div class="input-group" style="max-width: 300px;">
+                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text" class="form-control border-start-0 ps-0" placeholder="Caută în istoric...">
+                </div>
+            </div>
+
+            <div class="history-list">
+                
+                <div class="history-card status-safe d-flex flex-column flex-md-row">
+                    <div class="d-flex align-items-center flex-grow-1 w-100">
+                        <div class="history-icon">
+                            <i class="bi bi-building-check"></i>
+                        </div>
+                        <div class="history-details">
+                            <span class="history-date">7 Aprilie 2026 • 14:30</span>
+                            <h4 class="history-property">Apartament 2 Camere, Floreasca</h4>
+                            <p class="history-address"><i class="bi bi-geo-alt me-1"></i>Strada Calea Floreasca, București</p>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center justify-content-md-end w-100 mt-3 mt-md-0" style="max-width: 400px;">
+                        <span class="badge-custom badge-safe me-3">
+                            <i class="bi bi-shield-check"></i> Risc Scăzut
+                        </span>
+                        <a href="#" class="btn-view text-center">Vezi Raportul</a>
+                    </div>
+                </div>
+
+                <div class="history-card status-warning d-flex flex-column flex-md-row">
+                    <div class="d-flex align-items-center flex-grow-1 w-100">
+                        <div class="history-icon">
+                            <i class="bi bi-house-exclamation"></i>
+                        </div>
+                        <div class="history-details">
+                            <span class="history-date">5 Aprilie 2026 • 09:15</span>
+                            <h4 class="history-property">Garsonieră Universitate</h4>
+                            <p class="history-address"><i class="bi bi-geo-alt me-1"></i>Bulevardul Nicolae Bălcescu, București</p>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center justify-content-md-end w-100 mt-3 mt-md-0" style="max-width: 400px;">
+                        <span class="badge-custom badge-warning me-3">
+                            <i class="bi bi-exclamation-triangle"></i> Atenție la Preț
+                        </span>
+                        <a href="#" class="btn-view text-center">Vezi Raportul</a>
+                    </div>
+                </div>
+
+                <div class="history-card status-pending d-flex flex-column flex-md-row">
+                    <div class="d-flex align-items-center flex-grow-1 w-100">
+                        <div class="history-icon">
+                            <i class="bi bi-hourglass-split"></i>
+                        </div>
+                        <div class="history-details">
+                            <span class="history-date">Azi • Acum câteva minute</span>
+                            <h4 class="history-property">Duplex Pipera - Link Extern</h4>
+                            <p class="history-address"><i class="bi bi-link-45deg me-1"></i>Analiză de pe imobiliare.ro</p>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center justify-content-md-end w-100 mt-3 mt-md-0" style="max-width: 400px;">
+                        <span class="badge-custom badge-pending me-3">
+                            <i class="bi bi-arrow-repeat spin-icon"></i> Analiză în curs
+                        </span>
+                        <a href="#" class="btn-view text-center disabled text-muted">Așteaptă...</a>
+                    </div>
+                </div>
+
+            </div>
+
+            <nav class="mt-5">
+                <ul class="pagination justify-content-center">
+                    <li class="page-item disabled"><a class="page-link" href="#">Înapoi</a></li>
+                    <li class="page-item active"><a class="page-link bg-secondary border-secondary" href="#">1</a></li>
+                    <li class="page-item"><a class="page-link text-secondary" href="#">2</a></li>
+                    <li class="page-item"><a class="page-link text-secondary" href="#">Următorul</a></li>
+                </ul>
+            </nav>
+
+        </div>
+    </section>
+
+    <footer class="footer-custom">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-md-6 mb-4 mb-md-0 text-center text-md-start">
+                    <a href="{% url 'home' %}" class="footer-brand d-block mb-2">RentGuru</a>
+                    <p class="text-muted small mb-0">Platforma inteligentă pentru găsirea și evaluarea locuințelor.<br>Transformăm închirierea într-o experiență sigură și premium.</p>
+                </div>
+                <div class="col-md-6 text-center text-md-end">
+                    <p class="fw-bold mb-2" style="color: var(--mds-brown);">Urmărește-ne</p>
+                    <div class="social-links justify-content-center justify-content-md-end">
+                        <a href="https://www.facebook.com/profile.php?id=61574339169340" class="social-icon fb" title="Facebook"><i class="bi bi-facebook"></i></a>
+                        <a href="https://www.instagram.com/rentguru.ro/" class="social-icon ig" title="Instagram"><i class="bi bi-instagram"></i></a>
+                        <a href="https://wa.me/40771146577" class="social-icon wa" title="WhatsApp"><i class="bi bi-whatsapp"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="footer-divider">
+            <div class="text-center">
+                <p class="footer-text">&copy; 2026 RentGuru. Toate drepturile rezervate.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
