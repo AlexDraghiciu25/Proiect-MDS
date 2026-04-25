@@ -3,20 +3,18 @@ from django.contrib.auth import login, authenticate, logout
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib import messages
 
-# 1. Funcția de Înregistrare
 def register_view(request):
     if request.method == 'POST':
         form = UserCreationForm(request.POST)
         if form.is_valid():
             user = form.save()
-            login(request, user) # Logăm utilizatorul automat după înregistrare
+            login(request, user)
             messages.success(request, "Cont creat cu succes!")
-            return redirect('home') # Îl trimitem pe pagina principală
+            return redirect('home')
     else:
         form = UserCreationForm()
     return render(request, 'core/register.html', {'form': form})
 
-# 2. Funcția de Login
 def login_view(request):
     if request.method == 'POST':
         form = AuthenticationForm(request, data=request.POST)
@@ -31,11 +29,24 @@ def login_view(request):
         form = AuthenticationForm()
     return render(request, 'core/login.html', {'form': form})
 
-# 3. Funcția de Logout
 def logout_view(request):
     logout(request)
     return redirect('login')
 
-# 4. O pagină principală (temporară, ca să avem unde să fim redirecționați)
 def home_view(request):
     return render(request, 'core/home.html')
+
+def about(request):
+    return render(request, 'core/about.html')
+
+def contact(request):
+    return render(request, 'core/contact.html')
+
+def history(request):
+    return render(request, 'core/history.html')
+
+def result(request):
+    return render(request, 'core/result.html')
+
+def search_results(request):
+    return render(request, 'core/search_results.html')

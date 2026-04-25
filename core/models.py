@@ -1,7 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
 
-# 1. Modelul pentru Anunțurile Imobiliare (Datele brute)
 class Listing(models.Model):
     title = models.CharField(max_length=255)
     description = models.TextField()
@@ -13,20 +12,16 @@ class Listing(models.Model):
     def __str__(self):
         return self.title
 
-# 2. Modelul pentru Rapoartele generate de AI
 class Report(models.Model):
-    # Legăm raportul de un anunț specific și de utilizatorul care l-a generat
+
     listing = models.ForeignKey(Listing, on_delete=models.CASCADE, related_name='reports')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='my_reports')
     
-    # Rezultatele de la Detective Agent
-    integrity_score = models.IntegerField(default=0) # Scor 0-100
-    red_flags = models.JSONField(default=list) # Listă de probleme: ["Preț suspect", "Poze ireale"]
+    integrity_score = models.IntegerField(default=0)
+    red_flags = models.JSONField(default=list)
     
-    # Rezultatele de la Oracle Agent
-    proximity_analysis = models.TextField(blank=True, null=True) # Analiza zonă/facilități
+    proximity_analysis = models.TextField(blank=True, null=True) 
     
-    # Verdictul final AI
     final_verdict = models.TextField()
     generated_at = models.DateTimeField(auto_now_add=True)
 
