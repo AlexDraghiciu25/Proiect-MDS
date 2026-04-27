@@ -205,3 +205,123 @@ body {
 .social-icon.wa:hover { background-color: #25D366; }
 .footer-divider { border-color: #d4c5b9; margin: 30px 0 20px 0; }
 .footer-text { font-size: 0.9rem; color: var(--mds-brown); margin: 0; }
+
+.trust-score-circle {
+    width: 160px;
+    height: 160px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    background: conic-gradient(var(--score-color) var(--score), #eee 0deg);
+    transition: background 0.5s ease;
+}
+
+.score-high {
+    --score-color: #22c55e !important;
+}
+
+.score-mid {
+    --score-color: #facc15 !important;
+}
+
+.score-low {
+    --score-color: #ef4444 !important;
+}
+
+.trust-score-inner {
+    width: 130px;
+    height: 130px;
+    background: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+}
+
+.score-high .trust-score-value { color: #166534; }
+.score-mid .trust-score-value { color: #a16207; }
+.score-low .trust-score-value { color: #991b1b; }
+
+.trust-score-value {
+    font-size: 2.5rem;
+    font-weight: 800;
+}
+
+.ai-card {
+    background: #ffffff !important;
+    border-top: 4px solid var(--mds-brown) !important;
+    border-radius: 12px !important;
+}
+
+.price-comparison {
+    display: block !important;
+    width: 100% !important;
+    padding: 20px !important;
+    background-color: var(--mds-cream) !important;
+    border-radius: 12px;
+}
+
+.price-box {
+    display: block !important;
+    width: 100% !important;
+    float: none !important;
+    margin-bottom: 15px !important;
+    border-right: none !important;
+    padding: 0 !important;
+}
+
+.price-divider {
+    display: none !important;
+}
+
+.price-analysis,
+.price-comparison > div:last-child,
+.price-comparison > .col,
+.price-comparison > [class*="col"] {
+    display: block !important;
+    width: 100% !important;
+    float: none !important;
+    clear: both !important;
+    padding-left: 0 !important;
+}
+
+.price-value {
+    font-size: 1.6rem !important;
+    font-weight: 800 !important;
+    color: var(--mds-text) !important;
+    display: block !important;
+}
+
+.price-label {
+    display: block !important;
+    font-size: 0.85rem !important;
+    color: #6b7280 !important;
+}
+
+.bg-info {
+    display: inline-block !important;
+    width: fit-content !important;
+    background-color: var(--mds-brown) !important;
+    color: var(--mds-cream) !important;
+    padding: 4px 10px !important;
+    border-radius: 6px !important;
+    border: none !important;
+    margin-bottom: 8px !important;
+}
+
+.price-comparison p {
+    font-size: 0.95rem !important;
+    line-height: 1.5 !important;
+    margin: 5px 0 !important;
+}
+
+.text-muted {
+    display: block !important;
+    font-size: 0.85rem !important;
+    margin-top: 10px !important;
+    border-top: 1px solid rgba(92, 64, 51, 0.1) !important;
+    padding-top: 10px !important;
+}

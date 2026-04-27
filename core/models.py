@@ -117,6 +117,7 @@ class Report(models.Model):
     red_flags = models.JSONField(default=list) 
     proximity_analysis = models.TextField(blank=True, null=True) 
     final_verdict = models.TextField()
+    price_analysis = models.JSONField(null=True, blank=True)
     
     # --- Metadate Tehnice AI ---
     ai_model_version = models.CharField(max_length=100, null=True, blank=True, help_text="Ex: gpt-4-turbo-2024-04-09")

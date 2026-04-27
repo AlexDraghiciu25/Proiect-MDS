@@ -67,11 +67,12 @@
                         <h3 class="fw-bold mb-3" style="color: var(--mds-brown);">Explorare avansată</h3>
                         
                          <form action="{% url 'search_results' %}" method="GET">
+                            
                             <div class="mb-3">
                                 <label class="form-label">Unde cauți?</label>
                                 <div class="input-group">
                                     <span class="input-group-text bg-white border-end-0"><i class="bi bi-geo-alt text-muted"></i></span>
-                                    <input type="text" id="locationInput" class="form-control border-start-0 ps-0" placeholder="Oraș, cartier...">
+                                    <input type="text" name="q" id="locationInput" class="form-control border-start-0 ps-0" placeholder="Oraș, cartier...">
                                     <button class="btn btn-map" type="button" data-bs-toggle="modal" data-bs-target="#mapModal">
                                         <i class="bi bi-map me-1"></i> Hartă
                                     </button>
@@ -81,8 +82,8 @@
                             <div class="row g-3 mb-3">
                                 <div class="col-md-6">
                                     <label class="form-label">Tip Proprietate</label>
-                                    <select class="form-select">
-                                        <option selected>Orice tip</option>
+                                    <select name="tip" class="form-select">
+                                        <option value="" selected>Orice tip</option>
                                         <option value="apartament">Apartament</option>
                                         <option value="casa">Casă / Vilă</option>
                                         <option value="cabana">Cabană</option>
@@ -90,8 +91,8 @@
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Nr. Camere</label>
-                                    <select class="form-select">
-                                        <option selected>Oricâte</option>
+                                    <select name="camere" class="form-select">
+                                        <option value="" selected>Oricâte</option>
                                         <option value="1">1 (Garsonieră)</option>
                                         <option value="2">2 Camere</option>
                                         <option value="3">3 Camere</option>
@@ -103,11 +104,11 @@
                             <div class="row g-3 mb-4">
                                 <div class="col-md-6">
                                     <label class="form-label">Preț Maxim (€)</label>
-                                    <input type="number" class="form-control" placeholder="ex: 800">
+                                    <input type="number" name="pret_max" class="form-control" placeholder="ex: 800">
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Suprafață Min. (mp)</label>
-                                    <input type="number" class="form-control" placeholder="ex: 50">
+                                    <input type="number" name="suprafata_min" class="form-control" placeholder="ex: 50">
                                 </div>
                             </div>
 
@@ -116,31 +117,31 @@
                                 <div class="row g-2">
                                     <div class="col-6 col-sm-4">
                                         <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" id="petFriendly">
+                                            <input class="form-check-input" type="checkbox" name="pet_friendly" id="petFriendly">
                                             <label class="form-check-label text-muted small" for="petFriendly">Pet Friendly</label>
                                         </div>
                                     </div>
                                     <div class="col-6 col-sm-4">
                                         <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" id="parcare">
+                                            <input class="form-check-input" type="checkbox" name="parcare" id="parcare">
                                             <label class="form-check-label text-muted small" for="parcare">Parcare</label>
                                         </div>
                                     </div>
                                     <div class="col-6 col-sm-4">
                                         <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" id="centrala">
+                                            <input class="form-check-input" type="checkbox" name="centrala" id="centrala">
                                             <label class="form-check-label text-muted small" for="centrala">Centrală proprie</label>
                                         </div>
                                     </div>
                                     <div class="col-6 col-sm-4">
                                         <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" id="balcon">
+                                            <input class="form-check-input" type="checkbox" name="balcon" id="balcon">
                                             <label class="form-check-label text-muted small" for="balcon">Balcon/Terasă</label>
                                         </div>
                                     </div>
                                     <div class="col-6 col-sm-4">
                                         <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" id="aer">
+                                            <input class="form-check-input" type="checkbox" name="aer_conditionat" id="aer">
                                             <label class="form-check-label text-muted small" for="aer">Aer Cond.</label>
                                         </div>
                                     </div>
@@ -163,19 +164,25 @@
                             <h3 class="fw-bold mb-3" style="color: var(--mds-brown);">Asistent AI RentGuru</h3>
                             <p class="text-muted mb-4">Ai găsit deja un anunț pe alt site? Introdu link-ul mai jos și AI-ul nostru îl va scana pentru a detecta detalii ascunse, prețul corect și validitatea.</p>
                             
-                            <form action="{% url 'result' %}" method="POST">
-                                {% csrf_token %}
+                            <form action="{% url 'analyze_external' %}" method="POST"> {% csrf_token %}
                                 <div class="mb-4">
                                     <label class="form-label">Link-ul proprietății</label>
                                     <div class="input-group">
                                         <span class="input-group-text bg-white border-end-0"><i class="bi bi-link-45deg text-muted"></i></span>
-                                        <input type="url" class="form-control border-start-0 ps-0" placeholder="https://..." required>
+                                        <input type="url" name="external_url" class="form-control border-start-0 ps-0" placeholder="https://..." required>
                                     </div>
                                     <div class="form-text mt-2 small">
                                         <i class="bi bi-shield-check text-success"></i> Analizăm date de pe imobiliare.ro, storia, olx, etc.
                                     </div>
                                 </div>
-
+                                {% if messages %}
+                                    {% for message in messages %}
+                                        <div class="alert alert-warning alert-dismissible fade show rounded-pill px-4 shadow-sm" role="alert">
+                                            <i class="bi bi-exclamation-circle me-2"></i> {{ message }}
+                                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                        </div>
+                                    {% endfor %}
+                                {% endif %}
                                 <button type="submit" class="btn btn-custom w-100 shadow-sm" style="background-color: var(--mds-brown);">
                                     <i class="bi bi-magic me-2"></i> Analizează Anunțul
                                 </button>

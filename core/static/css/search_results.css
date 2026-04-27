@@ -38,7 +38,7 @@ body {
 }
 
 .filter-header {
-    background-color: var(--mds-brown);
+    background: linear-gradient(rgba(92, 64, 51, 0.8), rgba(45, 74, 34, 0.8)), url('https://cdn.pixabay.com/photo/2016/11/18/17/46/house-1836070_1280.jpg') center/cover;
     padding: 40px 0;
     color: var(--mds-cream);
 }
@@ -231,3 +231,63 @@ body {
 .social-icon.wa:hover { background-color: #25D366; }
 .footer-divider { border-color: #d4c5b9; margin: 30px 0 20px 0; }
 .footer-text { font-size: 0.9rem; color: var(--mds-brown); margin: 0; }
+
+.facilitati-wrapper {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    padding: 15px;
+    background-color: #fdfbf8;
+    border: 1px solid #e2dac9;
+    border-radius: 10px;
+}
+
+.custom-check {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.custom-check input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--mds-brown);
+    border-radius: 4px;
+    background-color: white;
+    margin: 0 8px 0 0;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.custom-check input[type="checkbox"]:checked {
+    background-color: var(--mds-green);
+    border-color: var(--mds-green);
+}
+
+.custom-check input[type="checkbox"]:checked::after {
+    content: '\F26E';
+    font-family: "bootstrap-icons";
+    color: white;
+    font-size: 12px;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.custom-check label {
+    font-size: 0.9rem;
+    color: var(--mds-text);
+    font-weight: 500;
+    cursor: pointer;
+    margin: 0;
+    line-height: 1;
+}
+
+.custom-check:hover input[type="checkbox"] {
+    border-color: var(--mds-green);
+}
