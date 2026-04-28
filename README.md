@@ -48,6 +48,78 @@ Sistemul este structurat pe patru straturi logice:
 
 ---
 
+## 📐 Arhitectură și Diagrame
+
+### Diagrama 1: Arhitectura Componentelor
+Acest grafic descrie interacțiunea dintre serverul Django, baza de date PostgreSQL și serviciile externe de AI și Scraping.
+
+```mermaid
+graph TD;
+    UI[Frontend: Django Templates + Bootstrap] -- URL/Filtre --> Django[Backend: Django Framework];
+    Django -- Persistență --> DB[(Database: PostgreSQL)];
+    Django -- Web Scraping --> Web[Site-uri Imobiliare: OLX/Imobiliare.ro];
+    Django -- Prompt Contextual --> AI[AI Layer: OpenAI GPT-4 / LangChain];
+    Django -- Analiză Geospațială --> Maps[Geospatial: Google Maps API];
+    AI -- Scor Integritate --> Django;
+    Maps -- Validare Distanțe --> Django;
+    Django -- Raport Final Audit --> UI;
+```
+
+### Diagrama 2: Fluxul de Audit Imobiliar (AI Agents)
+Descrie procesul prin care un link de anunț este prelucrat de sistem pentru a genera un raport de încredere.
+
+```mermaid
+sequenceDiagram
+    participant U as Utilizator
+    participant D as Django (Core)
+    participant S as Ingestion Layer (Scraper)
+    participant AI as AI Layer (Detective Agent)
+    participant DB as PostgreSQL
+
+    U->>D: Introduce link anunț extern
+    D->>S: Rulează Parser (BeautifulSoup/Requests)
+    S-->>D: Returnează Date brute (Preț, Descriere, Dotări)
+    D->>AI: Trimite date pentru audit (Detecție Red Flags)
+    AI-->>D: Returnează Scor Integritate + Verdict
+    D->>DB: Salvează Listing & Report
+    DB-->>D: Confirmare salvare
+    D-->>U: Afișează Dashboard Raport (Rezultat AI)
+```
+
+### Diagrama 3: Diagrama de Clase (Modele de Date)
+Această diagramă reflectă structura bazei de date definită în modelele proiectului.
+
+```mermaid
+classDiagram
+    class User {
+        +String username
+        +String email
+    }
+    class Listing {
+        +URL source_url
+        +String title
+        +Decimal price
+        +String city
+        +String neighborhood
+        +Integer rooms
+        +Boolean has_ac
+        +Boolean has_parking
+        +String processing_status
+    }
+    class Report {
+        +Integer integrity_score
+        +JSON red_flags
+        +String proximity_analysis
+        +Text final_verdict
+        +DateTime generated_at
+        +Integer token_usage
+    }
+
+    User "1" -- "*" Report : vizualizează
+    Listing "1" -- "*" Report : generează
+```
+---
+
 ## 🧪 Verificări Formale & Calitate
 * **Validare Date:** Verificarea integrității JSON-urilor returnate de agenți.
 * **Cross-Check:** Compararea facilităților declarate în text cu datele geografice reale.
