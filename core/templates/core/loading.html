@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container d-flex justify-content-center align-items-center" style="min-height: 70vh;">
+    <div class="text-center">
+        <h2 class="mb-4" style="font-family: var(--font-logo); color: var(--mds-brown); font-size: 3rem;">RentGuru</h2>
+        
+        <div class="spinner-border mb-4" role="status" style="width: 3rem; height: 3rem; color: var(--mds-green);">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        
+        <h3 class="report-title">Analizăm anunțul...</h3>
+        <p class="report-subtitle">Verificăm prețul, locația și scorul de încredere pentru tine.</p>
+        
+        <div id="loading-messages" class="mt-3 fw-medium" style="color: var(--mds-brown); font-style: italic;">
+            "Consultăm baza de date imobiliară..."
+        </div>
+    </div>
+</div>
+
+<script>
+    const messages = [
+        "Consultăm baza de date imobiliară...",
+        "Calculăm media zonei...",
+        "Analizăm detaliile proprietății cu AI...",
+        "Verificăm scorul de încredere...",
+        "Aproape gata..."
+    ];
+    let i = 0;
+    setInterval(() => {
+        i = (i + 1) % messages.length;
+        document.getElementById('loading-messages').innerText = '"' + messages[i] + '"';
+    }, 1500);
+</script>
+{% endblock %}
