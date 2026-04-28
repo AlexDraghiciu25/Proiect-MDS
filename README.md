@@ -36,14 +36,14 @@ Sistemul este structurat pe patru straturi logice:
 ### 🔹 Sprint 2: Data & Scraper
 - [ ] Implementare Parser pentru platformele imobiliare (OLX/Imobiliare.ro).
 - [ ] Validare formală a datelor (Data Cleaning & Regex).
-- [ ] Creare diagrame UML.
+- [✓] Creare diagrame UML.
 
 ### 🔹 Sprint 3: AI Agents Integration
-- [ ] **Detective Agent:** Integrare LLM pentru analiza semantică a descrierilor.
+- [✓] **Detective Agent:** Integrare LLM pentru analiza semantică a descrierilor.
 - [ ] **Oracle Agent:** Integrare API Hărți pentru calcularea punctelor de interes.
 
 ### 🔹 Sprint 4: Finalization & Testing
-- [ ] Generarea raportului de încredere (Onestitate + Lifestyle).
+- [✓] Generarea raportului de încredere (Onestitate + Lifestyle).
 - [ ] Testare unitară (Unit Testing) și documentație finală.
 
 ---
