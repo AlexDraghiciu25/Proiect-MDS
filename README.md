@@ -97,13 +97,68 @@ classDiagram
     }
     class Listing {
         +URL source_url
+        +String source_website
+        +Json raw data
+        +String processing_status
         +String title
+        +Text description
         +Decimal price
+        +String currency
+        +String property_destination
+        +String rental_period
+        +String availability
         +String city
         +String neighborhood
         +Integer rooms
+        +Integer bathrooms
+        +Integer kitchen
+        +Integer balconys
+        +Decimal useful_surface
+        +String floor
+        +Integer total_floors
+        +Integer construction_year
+        +String partitioning
+        +String comfort_level
+        +String building_type
+        +String building_structure
+        +String furnishing_state
+        +String heating_type
+        +Boolean has_underfloor_heating
+        +Boolean has_gas
+        +Boolean has_electricity
+        +Boolean has_water
+        +Boolean has_sewage
+        +Boolean has_gas_meter
+        +Boolean has_water_meter
+        +Boolean has_heat_meter
+        +String internet_type
+        +String flooring
+        +String windows
+        +String interior_doors
+        +String entrance_door
+        +String walls
+        +String thermal_insulation
+        +Boolean has_fridge
+        +Boolean has_washing_machine
+        +Boolean has_dishwasher
+        +Boolean has_tv
+        +Boolean has_oven
+        +Boolean has_microwave
+        +Boolean has_hood
         +Boolean has_ac
+        +Boolean has_intercom
+        +Boolean has_elevator
+        +Boolean has_video_surveillance
         +Boolean has_parking
+        +Boolean is_pet_friendly
+        +Boolean street_paved
+        +Boolean street_lit
+        +Boolean near_public_transit
+        +String energy_class
+        +Text vices
+        +Integer data_completeness_score
+        +DateTime created_at
+        +DateTime updated_at
         +String processing_status
     }
     class Report {
