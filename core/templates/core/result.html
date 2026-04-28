@@ -1,0 +1,179 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raport AI - {{ report.listing.title|default:"Analiză" }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="{% static 'css/result.css' %}">
+</head>
+<body>
+
+    <nav class="navbar navbar-expand-lg navbar-custom sticky-top">
+        <div class="container">
+            <a class="navbar-brand" href="{% url 'home' %}">RentGuru</a>
+            <div class="d-flex align-items-center mt-3 mt-lg-0">
+                <span class="me-3 fw-bold" style="color: var(--mds-brown);">Salut, {{ user.username|default:"Oaspete" }}!</span>
+            </div>
+        </div>
+    </nav>
+
+    <section class="search-header">
+        <div class="container">
+            <div class="row justify-content-center">
+                <div class="col-lg-8">
+                    <form action="{% url 'analyze_external' %}" method="POST" class="search-input-group d-flex">
+                        {% csrf_token %}
+                        <input type="url" name="external_url" class="form-control" placeholder="Lipește un nou link..." required>
+                        <button class="btn btn-analyze" type="submit"><i class="bi bi-magic me-1"></i> Analizează</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="report-section">
+        <div class="container">
+            
+            <div class="mb-5">
+                <span class="badge bg-success mb-2"><i class="bi bi-check-circle me-1"></i> Analiză Finalizată</span>
+                <h1 class="report-title">{{ report.listing.title }}</h1>
+                <p class="report-subtitle">
+                    <i class="bi bi-geo-alt me-1"></i> {{ report.listing.city }}, {{ report.listing.neighborhood|default:"Zonă nespecificată" }} 
+                    • Sursă: {{ report.listing.source_website|default:"Externă" }}
+                </p>
+            </div>
+
+            <div class="row g-4">
+
+                <div class="col-lg-4">
+                    <div class="ai-card" style="border-top-color: var(--mds-green);">
+                        <h3 class="ai-card-title"><i class="bi bi-shield-check text-success"></i> Index de Încredere</h3>
+                        <div class="trust-score-container">
+                            {% if report %}
+                                <div class="trust-score-circle {% if report.integrity_score > 70 %}score-high{% elif report.integrity_score > 40 %}score-mid{% else %}score-low{% endif %}" 
+                                    style="--score: {{ report.integrity_score }}%;">
+                                    <div class="trust-score-inner">
+                                        <span class="trust-score-value">{{ report.integrity_score }}<small class="fs-6">%</small></span>
+                                    </div>
+                                </div>
+                            {% else %}
+                                <div class="trust-score-circle score-empty" style="--score: 0%;">
+                                    <div class="trust-score-inner">
+                                        <span class="trust-score-value text-muted">--</span>
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="ai-card mt-4" style="border-top: 4px solid #d97706;">
+                        <div class="p-2">
+                            <h3 class="fs-5 fw-bold mb-4" style="color: #92400e; display: flex; align-items: center;">
+                                <i class="bi bi-tag-fill me-2 text-warning"></i> Detalii Preț
+                            </h3>
+
+                            <div style="display: flex; flex-direction: column; gap: 15px;">
+
+                                <div>
+                                    <span style="font-size: 0.7rem; letter-spacing: 1px; text-transform: uppercase; color: #6b7280; font-weight: 700;">Preț Cerut</span>
+                                    <div style="display: flex; align-items: baseline; gap: 8px; margin-top: 4px;">
+                                        <span style="font-size: 2.2rem; font-weight: 800; color: #1a1a1a; line-height: 1;">
+                                            {{ listing.price }}
+                                        </span>
+                                        <span style="font-weight: 600; color: #6b7280;">
+                                            {{ listing.currency|default:"EUR" }}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <hr style="border-color: #e5e7eb; margin: 0;">
+                                {% if report.price_analysis %}
+                                <div style="display: flex; flex-direction: column; gap: 8px;">
+
+                                    <span class="badge-custom {% if report.price_analysis.difference_percentage == 0 %}mds-badge-neutral{% elif report.price_analysis.difference_percentage < 0 %}mds-badge-success{% else %}mds-badge-danger{% endif %}"
+                                          style="width: fit-content;">
+                                        {% if report.price_analysis.difference_percentage == 0 %}
+                                            <i class="bi bi-check-circle-fill me-1"></i> Preț conform pieței
+                                        {% else %}
+                                            {{ report.price_analysis.difference_percentage }}% față de medie
+                                        {% endif %}
+                                    </span>
+
+                                    <p style="color: #374151; font-size: 0.95rem; line-height: 1.5; margin: 0;">
+                                        {{ report.price_analysis.label }}
+                                    </p>
+
+                                    <div style="font-size: 0.85rem; color: #6b7280; border-top: 1px solid #e5e7eb; padding-top: 8px;">
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        Media zonei: <strong>{{ report.price_analysis.average_zone_price }} {{ listing.currency|default:"EUR" }}</strong>
+                                    </div>
+
+                                </div>
+                                {% endif %}
+
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-8">
+                    <div class="ai-card mb-4" style="border-top-color: var(--mds-brown);">
+                        <h3 class="ai-card-title"><i class="bi bi-robot text-secondary"></i> Concluzia Agentului AI</h3>
+                        <p style="line-height: 1.7;">{{ report.final_verdict }}</p>
+                    </div>
+
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <div class="ai-card bg-light border-0 shadow-none h-100">
+                                <h4 class="fs-5 fw-bold mb-3" style="color: #b91c1c;">
+                                    <i class="bi bi-exclamation-triangle me-2"></i>Atenție (Red Flags)
+                                </h4>
+                                <ul class="flag-list list-unstyled">
+                                    {% for flag in report.red_flags %}
+                                    <li class="d-flex mb-2">
+                                        <i class="bi bi-dot fs-4 text-danger"></i>
+                                        <div>{{ flag }}</div>
+                                    </li>
+                                    {% empty %}
+                                    <li class="text-success small">Nu au fost detectate riscuri majore în acest anunț.</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="ai-card bg-light border-0 shadow-none h-100 p-4">
+                                <h4 class="fs-5 fw-bold mb-3" style="color: var(--mds-green);">
+                                    <i class="bi bi-geo-alt-fill me-2"></i>Analiza Proximității
+                                </h4>
+                                <div class="proximity-content" style="line-height: 1.6; color: #4b5563;">
+                                    {% if report.proximity_analysis %}
+                                        {{ report.proximity_analysis|linebreaks }}
+                                        {% if "zgomot" in report.proximity_analysis|lower or "club" in report.proximity_analysis|lower %}
+                                            <div class="alert alert-warning mt-3 py-2 px-3 border-0" style="background-color: #fef3c7; color: #92400e; border-radius: 8px;">
+                                                <i class="bi bi-volume-up-fill me-2"></i> 
+                                                <small>Atenție: Zonă potențial zgomotoasă.</small>
+                                            </div>
+                                        {% endif %}
+                                    {% else %}
+                                        <p class="text-muted small">Informațiile despre proximitate nu sunt disponibile.</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer-custom mt-5">
+        <div class="container text-center">
+            <p>&copy; 2026 RentGuru. Toate drepturile rezervate.</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
