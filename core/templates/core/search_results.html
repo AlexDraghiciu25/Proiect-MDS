@@ -38,12 +38,14 @@
                 </ul>
                 <div class="d-flex align-items-center mt-3 mt-lg-0">
                     <span class="me-3 fw-bold" style="color: var(--mds-brown);">Salut, {{ user.username|default:"Oaspete" }}!</span>
+                    {% if user.is_authenticated %}
                     <form action="{% url 'logout' %}" method="post" class="d-inline">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
                             <i class="bi bi-box-arrow-right me-1"></i> Ieși
                         </button>
                     </form>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -52,36 +54,78 @@
     <section class="filter-header">
         <div class="container">
             <h2 class="mb-4 text-center fw-bold">Modifică Filtrele</h2>
-            <div class="filter-bar">
-                <form action="#" method="GET">
-                    <div class="row g-3 align-items-end">
+            <div class="filter-bar p-4 shadow-sm bg-white rounded">
+                <form action="{% url 'search_results' %}" method="GET">
+                    <div class="row g-3 mb-3 align-items-end">
                         <div class="col-md-3">
-                            <label class="form-label">Oraș / Zonă</label>
-                            <input type="text" class="form-control" value="București" placeholder="Ex: București">
+                            <label class="form-label fw-bold small">Oraș / Zonă</label>
+                            <input type="text" name="q" class="form-control" value="{{ query|default:'' }}" placeholder="Ex: București">
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label">Tip Proprietate</label>
-                            <select class="form-select">
+                            <label class="form-label fw-bold small">Tip Proprietate</label>
+                            <select name="tip" class="form-select">
                                 <option value="">Toate</option>
-                                <option value="1">Garsonieră</option>
-                                <option value="2" selected>Apartament 2 camere</option>
-                                <option value="3">Apartament 3+ camere</option>
+                                <option value="apartament">Apartament</option>
+                                <option value="casa">Casă</option>
+                                <option value="garsoniera">Garsonieră</option>
                             </select>
                         </div>
                         <div class="col-md-2">
-                            <label class="form-label">Preț Max (€)</label>
-                            <input type="number" class="form-control" value="600" placeholder="Ex: 500">
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">Sortare</label>
-                            <select class="form-select">
-                                <option value="relevanta">Cele mai sigure</option>
-                                <option value="pret_crescator">Preț crescător</option>
-                                <option value="pret_descrescator">Preț descrescător</option>
+                            <label class="form-label fw-bold small">Camere</label>
+                            <select name="camere" class="form-select">
+                                <option value="">Oricâte</option>
+                                <option value="1">1 Cameră</option>
+                                <option value="2">2 Camere</option>
+                                <option value="3">3 Camere</option>
+                                <option value="4">4+ Camere</option>
                             </select>
                         </div>
                         <div class="col-md-2">
-                            <button type="submit" class="btn btn-filter"><i class="bi bi-search me-1"></i> Aplică</button>
+                            <label class="form-label fw-bold small">Preț Max (€)</label>
+                            <input type="number" name="pret_max" class="form-control" value="{{ request.GET.pret_max }}" placeholder="Fără limită">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold small">Suprafață Min (mp)</label>
+                            <input type="number" name="suprafata_min" class="form-control" value="{{ request.GET.suprafata_min }}" placeholder="Ex: 40">
+                        </div>
+                    </div>
+
+                    <div class="col-12">
+    <label class="form-label fw-bold small d-block">Facilități dorite:</label>
+    <div class="facilitati-wrapper">
+        <div class="custom-check">
+            <input type="checkbox" name="pet_friendly" id="pet_friendly" {% if request.GET.pet_friendly %}checked{% endif %}>
+            <label for="pet_friendly">Pet Friendly</label>
+        </div>
+        <div class="custom-check">
+            <input type="checkbox" name="parcare" id="parcare" {% if request.GET.parcare %}checked{% endif %}>
+            <label for="parcare">Parcare</label>
+        </div>
+        <div class="custom-check">
+            <input type="checkbox" name="aer_conditionat" id="aer_conditionat" {% if request.GET.aer_conditionat %}checked{% endif %}>
+            <label for="aer_conditionat">Aer Cond.</label>
+        </div>
+        <div class="custom-check">
+            <input type="checkbox" name="centrala" id="centrala" {% if request.GET.centrala %}checked{% endif %}>
+            <label for="centrala">Centrală</label>
+        </div>
+        <div class="custom-check">
+            <input type="checkbox" name="balcon" id="balcon" {% if request.GET.balcon %}checked{% endif %}>
+            <label for="balcon">Balcon</label>
+        </div>
+        <div class="custom-check">
+            <input type="checkbox" name="lift" id="lift" {% if request.GET.lift %}checked{% endif %}>
+            <label for="lift">Lift</label>
+        </div>
+    </div>
+</div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-12 text-center mt-2">
+                            <button type="submit" class="btn btn-filter px-5">
+                                <i class="bi bi-search me-2"></i> Aplică Noile Filtre
+                            </button>
                         </div>
                     </div>
                 </form>
@@ -93,99 +137,65 @@
         <div class="container">
             
             <div class="results-count">
-                Am găsit 24 de rezultate sigure pentru căutarea ta
+                Am găsit {{ nr_rezultate }} rezultate pentru căutarea ta
             </div>
 
             <div class="row g-4">
                 
+                {% for anunt in anunturi %}
                 <div class="col-md-6 col-lg-4">
                     <div class="property-card">
                         <div class="property-img-wrapper">
-                            <img src="https://cdn.pixabay.com/photo/2014/12/27/14/37/living-room-581073_1280.jpg" alt="Apartament" class="property-img">
+                            {% if anunt.main_image %}
+                                <img src="{{ anunt.main_image.url }}" alt="{{ anunt.title }}" class="property-img">
+                            {% else %}
+                                <img src="https://cdn.pixabay.com/photo/2014/12/27/14/37/living-room-581073_1280.jpg" alt="No image" class="property-img">
+                            {% endif %}
+                            
                             <div class="ai-badge badge-high">
-                                <i class="bi bi-shield-check"></i> 95% Sigur
+                                <i class="bi bi-shield-check"></i> 90% Sigur
                             </div>
-                            <div class="property-price">450 €</div>
+                            
+                            <div class="property-price">{{ anunt.price }} {{ anunt.currency }}</div>
                         </div>
                         <div class="property-info">
-                            <h3 class="property-title">Apartament 2 Camere, Tineretului</h3>
-                            <p class="property-address"><i class="bi bi-geo-alt me-1"></i>Aleea Secuilor, Sector 4</p>
+                            <h3 class="property-title">{{ anunt.title|truncatechars:40 }}</h3>
+                            <p class="property-address"><i class="bi bi-geo-alt me-1"></i>{{ anunt.city }}{% if anunt.neighborhood %}, {{ anunt.neighborhood }}{% endif %}</p>
                             
                             <div class="property-features">
-                                <div class="feature-item"><i class="bi bi-rulers"></i> 55 mp</div>
-                                <div class="feature-item"><i class="bi bi-car-front"></i> 1 Parcare</div>
-                                <div class="feature-item"><i class="bi bi-building"></i> Etaj 2/8</div>
+                                <div class="feature-item"><i class="bi bi-rulers"></i> {{ anunt.useful_surface|default:"-" }} mp</div>
+                                <div class="feature-item">
+                                    <i class="bi bi-car-front" {% if not anunt.has_parking %}style="color: #ccc;"{% endif %}></i> 
+                                    {% if anunt.has_parking %}Parcare{% else %}Fără{% endif %}
+                                </div>
+                                <div class="feature-item"><i class="bi bi-building"></i> Etaj {{ anunt.floor|default:"-" }}</div>
                             </div>
                             
                             <a href="{% url 'result' %}" class="btn-view-report"><i class="bi bi-magic me-1"></i> Vezi Analiza Completă</a>
                         </div>
                     </div>
                 </div>
-
-                <div class="col-md-6 col-lg-4">
-                    <div class="property-card">
-                        <div class="property-img-wrapper">
-                            <img src="https://cdn.pixabay.com/photo/2017/08/02/01/01/living-room-2569325_1280.jpg" alt="Apartament" class="property-img">
-                            <div class="ai-badge badge-high">
-                                <i class="bi bi-shield-check"></i> 88% Sigur
-                            </div>
-                            <div class="property-price">520 €</div>
-                        </div>
-                        <div class="property-info">
-                            <h3 class="property-title">Apartament 2 Camere, Dristor</h3>
-                            <p class="property-address"><i class="bi bi-geo-alt me-1"></i>Bulevardul Camil Ressu, Sector 3</p>
-                            
-                            <div class="property-features">
-                                <div class="feature-item"><i class="bi bi-rulers"></i> 60 mp</div>
-                                <div class="feature-item"><i class="bi bi-car-front" style="color: #ccc;"></i> Fără</div>
-                                <div class="feature-item"><i class="bi bi-building"></i> Etaj 4/10</div>
-                            </div>
-                            
-                            <a href="{% url 'result' %}" class="btn-view-report"><i class="bi bi-magic me-1"></i> Vezi Analiza Completă</a>
-                        </div>
-                    </div>
+                {% empty %}
+                <div class="col-12 text-center py-5">
+                    <i class="bi bi-search-heart fs-1 text-muted"></i>
+                    <p class="mt-3">Nu am găsit niciun anunț care să se potrivească filtrelor tale.</p>
+                    <a href="{% url 'home' %}" class="btn btn-outline-secondary">Înapoi la Dashboard</a>
                 </div>
-
-                <div class="col-md-6 col-lg-4">
-                    <div class="property-card">
-                        <div class="property-img-wrapper">
-                            <img src="https://cdn.pixabay.com/photo/2016/11/18/17/20/living-room-1835923_1280.jpg" alt="Apartament" class="property-img">
-                            <div class="ai-badge badge-med">
-                                <i class="bi bi-exclamation-triangle"></i> 65% Atenție
-                            </div>
-                            <div class="property-price">580 €</div>
-                        </div>
-                        <div class="property-info">
-                            <h3 class="property-title">Apartament 2 Camere, Militari Residence</h3>
-                            <p class="property-address"><i class="bi bi-geo-alt me-1"></i>Strada Rezervelor, Chiajna</p>
-                            
-                            <div class="property-features">
-                                <div class="feature-item"><i class="bi bi-rulers"></i> 48 mp</div>
-                                <div class="feature-item"><i class="bi bi-car-front"></i> 1 Parcare</div>
-                                <div class="feature-item"><i class="bi bi-building"></i> Etaj 1/6</div>
-                            </div>
-                            
-                            <a href="{% url 'result' %}" class="btn-view-report"><i class="bi bi-magic me-1"></i> Vezi Analiza Completă</a>
-                        </div>
-                    </div>
-                </div>
+                {% endfor %}
 
             </div>
             
+            {% if anunturi.has_other_pages %}
             <nav class="mt-5">
                 <ul class="pagination justify-content-center">
-                    <li class="page-item disabled"><a class="page-link" href="#">Înapoi</a></li>
-                    <li class="page-item active"><a class="page-link bg-secondary border-secondary" href="#">1</a></li>
-                    <li class="page-item"><a class="page-link text-secondary" href="#">2</a></li>
-                    <li class="page-item"><a class="page-link text-secondary" href="#">3</a></li>
-                    <li class="page-item"><a class="page-link text-secondary" href="#">Următorul</a></li>
-                </ul>
+                    </ul>
             </nav>
+            {% endif %}
 
         </div>
     </section>
 
-    <footer class="footer-custom">
+    <footer class="footer-custom mt-5">
         <div class="container">
             <div class="row align-items-center">
                 <div class="col-md-6 mb-4 mb-md-0 text-center text-md-start">
@@ -195,9 +205,9 @@
                 <div class="col-md-6 text-center text-md-end">
                     <p class="fw-bold mb-2" style="color: var(--mds-brown);">Urmărește-ne</p>
                     <div class="social-links justify-content-center justify-content-md-end">
-                        <a href="#" class="social-icon fb" title="Facebook"><i class="bi bi-facebook"></i></a>
-                        <a href="#" class="social-icon ig" title="Instagram"><i class="bi bi-instagram"></i></a>
-                        <a href="https://wa.me/40771146577" class="social-icon wa" title="WhatsApp" target="_blank"><i class="bi bi-whatsapp"></i></a>
+                        <a href="#" class="social-icon fb"><i class="bi bi-facebook"></i></a>
+                        <a href="#" class="social-icon ig"><i class="bi bi-instagram"></i></a>
+                        <a href="#" class="social-icon wa"><i class="bi bi-whatsapp"></i></a>
                     </div>
                 </div>
             </div>
