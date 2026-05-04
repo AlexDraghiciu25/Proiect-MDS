@@ -1,5 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 # ==========================================
 # 1. MODELUL LISTING (Anunțul Imobiliar)
@@ -127,3 +129,19 @@ class Report(models.Model):
 
     def __str__(self):
         return f"Report for Listing ID {self.listing.id} | Score: {self.integrity_score} | User: {self.user.username}"
+    
+    @receiver(post_save, sender="core.Report") 
+    def limit_user_history(sender, instance, created, **kwargs):
+        if created:
+            user = instance.user
+            max_reports = 60
+            
+            # Importăm modelul aici, în interiorul funcției, pentru a evita "circular import"
+            from .models import Report 
+            
+            old_reports_ids = Report.objects.filter(user=user) \
+                                            .order_by('-generated_at')[max_reports:] \
+                                            .values_list('id', flat=True)
+            
+            if old_reports_ids:
+                Report.objects.filter(id__in=old_reports_ids).delete()

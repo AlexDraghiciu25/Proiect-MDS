@@ -1,10 +1,15 @@
+from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, authenticate, logout
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
+from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.db.models import Q
+from django.db.models import Q, Avg
 from .models import Listing, Report 
 from .services import DetectiveAgent
+from .utils import scrape_single_url
+from django.utils import timezone
+from django.core.paginator import Paginator
 
 # ==========================================
 # 1. AUTENTIFICARE
@@ -52,62 +57,101 @@ def about(request):
 def contact(request):
     return render(request, 'core/contact.html')
 
+# core/views.py
+
 def history(request):
-    return render(request, 'core/history.html')
+    if not request.user.is_authenticated:
+        return redirect('login')
+    rapoarte_list = Report.objects.filter(user=request.user).select_related('listing').order_by('-generated_at')
+    
+    paginator = Paginator(rapoarte_list, 6) 
+    
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    return render(request, 'core/history.html', {
+        'rapoarte': page_obj,
+    })
 
 # ==========================================
 # 3. LOGICA DE CĂUTARE AVANSATĂ CU AI (Cea optimizată)
 # ==========================================
 def search_results(request):
-    # Am păstrat versiunea cu prefetch_related pentru performanță
-    rezultate = Listing.objects.all().prefetch_related('report_set')
+    # 1. Inițializăm query-ul de bază cu prefetch_related pentru a evita interogări multiple în baza de date
+    rezultate = Listing.objects.all().prefetch_related('reports')
 
-    # Filtre Text
-    query = request.GET.get('q')
+    # 2. FILTRU TEXT (Căutare universală: Zonă, Oraș, Titlu)
+    query = request.GET.get('q', '').strip()
     if query:
         rezultate = rezultate.filter(
             Q(city__icontains=query) | 
             Q(neighborhood__icontains=query) | 
-            Q(title__icontains=query)
+            Q(title__icontains=query) |
+            Q(description__icontains=query)
         )
 
-    # Filtre Numerice
+    # 3. FILTRE NUMERICE (Preț, Camere, Suprafață)
+    pret_min = request.GET.get('pret_min')
     pret_max = request.GET.get('pret_max')
+    if pret_min:
+        rezultate = rezultate.filter(price__gte=pret_min)
     if pret_max:
         rezultate = rezultate.filter(price__lte=pret_max)
 
     camere = request.GET.get('camere')
-    if camere:
+    if camere and camere != "Toate":
         rezultate = rezultate.filter(rooms=camere)
 
     suprafata_min = request.GET.get('suprafata_min')
     if suprafata_min:
         rezultate = rezultate.filter(useful_surface__gte=suprafata_min)
 
-    # Filtre Categorii
-    tip_cladire = request.GET.get('tip')
-    if tip_cladire and tip_cladire != "Orice tip":
-        rezultate = rezultate.filter(building_type=tip_cladire)
+    partitionare = request.GET.get('partitionare')
+    if partitionare and partitionare != "Toate":
+        rezultate = rezultate.filter(partitioning=partitionare)
 
-    # Filtre Facilități
-    if request.GET.get('pet_friendly'):
+    # 5. FILTRE FACILITĂȚI (Boolean - se activează dacă checkbox-ul e bifat)
+    if request.GET.get('pet_friendly') == 'on':
         rezultate = rezultate.filter(is_pet_friendly=True)
-    if request.GET.get('parcare'):
+    if request.GET.get('parcare') == 'on':
         rezultate = rezultate.filter(has_parking=True)
-    if request.GET.get('aer_conditionat'):
+    if request.GET.get('aer_conditionat') == 'on':
         rezultate = rezultate.filter(has_ac=True)
-    if request.GET.get('centrala'):
-        rezultate = rezultate.filter(heating_type__icontains='central')
-    if request.GET.get('balcon'):
-        rezultate = rezultate.filter(balconies__gt=0)
-    if request.GET.get('lift'):
+    if request.GET.get('lift') == 'on':
         rezultate = rezultate.filter(has_elevator=True)
+    if request.GET.get('centrala') == 'on':
+        rezultate = rezultate.filter(heating_type__icontains='central')
 
+    # 6. ANALIZA DATELOR (Statistici rapide pentru rezultatele afișate)
+    # Calculăm media de preț a anunțurilor filtrate pentru a ajuta utilizatorul
+    statistici = rezultate.aggregate(
+        pret_mediu=Avg('price'),
+        suprafata_medie=Avg('useful_surface')
+    )
+    
+    # Adăugăm și prețul per metru pătrat mediu dacă există date
+    pret_per_mp = 0
+    if statistici['pret_mediu'] and statistici['suprafata_medie']:
+        pret_per_mp = statistici['pret_mediu'] / statistici['suprafata_medie']
+
+    # 7. ORDONARE (Cele mai noi la început)
+    rezultate = rezultate.order_by('-id')
+
+    # 8. CONTEXT PENTRU TEMPLATE
     context = {
         'anunturi': rezultate,
         'nr_rezultate': rezultate.count(),
-        'cuvant_cautat': query
+        'cuvant_cautat': query,
+        'statistici': {
+            'pret_mediu': round(statistici['pret_mediu'], 2) if statistici['pret_mediu'] else 0,
+            'suprafata_medie': round(statistici['suprafata_medie'], 1) if statistici['suprafata_medie'] else 0,
+            'pret_per_mp': round(pret_per_mp, 2)
+        },
+        # Trimitem și filtrele înapoi pentru a rămâne selectate în interfață
+        'filtru_camere': camere,
+        'filtru_pret_max': pret_max,
     }
+
     return render(request, 'core/search_results.html', context)
 
 # ==========================================
@@ -131,11 +175,11 @@ def result_detail_view(request, listing_id):
         'listing': listing,  # Schimbat din 'anunt' în 'listing'
         'report': report
     })
-
+@login_required
 def run_analysis_view(request, listing_id):
     if not request.user.is_authenticated:
-        messages.warning(request, "Trebuie să fii logat pentru a folosi Detectivul AI.")
-        return redirect('login')
+        # Returnezi o eroare sau un mesaj că trebuie să fie logat
+        return JsonResponse({'error': 'Trebuie să fii logat pentru analiză.'}, status=401)
     
     listing = get_object_or_404(Listing, id=listing_id)
     
@@ -155,44 +199,46 @@ def run_analysis_view(request, listing_id):
         messages.error(request, "Analiza AI a eșuat. Verifică cheia API.")
         return redirect('home')
 
+# core/views.py
+
 def analyze_external(request):
     if request.method == 'POST':
-        url_extern = request.POST.get('external_url', '').lower()
+        url_extern = request.POST.get('external_url', '').strip()
         
-        # 1. Validare link (rămâne la fel)
-        siteuri_permise = ['olx.ro', 'storia.ro', 'imobiliare.ro']
-        if not any(site in url_extern for site in siteuri_permise):
-            messages.error(request, "Link invalid!")
-            return redirect('home')
+        # 1. Căutăm dacă există deja
+        listing = Listing.objects.filter(source_url=url_extern).first()
+        
+        # 2. Dacă NU există, facem SCRAPE + NORMALIZARE
+        if not listing:
+            messages.info(request, "Anunț nou detectat. Pornim scanarea...")
+            # Această funcție (din utils.py) trebuie să returneze listing-ul GATA NORMALIZAT
+            listing = scrape_single_url(url_extern)
+            
+            if not listing:
+                messages.error(request, "Scraper-ul nu a putut accesa link-ul.")
+                return redirect('home')
 
-        # 2. Luăm ultimul anunț
-        listing_de_analizat = Listing.objects.last()
+        # 3. Verificăm dacă are REPORT (Analiza AI)
+        report = Report.objects.filter(listing=listing).first()
         
-        if listing_de_analizat:
-            # VERIFICARE CRITICĂ: Are deja un raport?
-            raport_existent = Report.objects.filter(listing=listing_de_analizat).first()
+        # 4. Dacă nu are raport, sau dacă raportul existent are erori (opțional), rulăm AI
+        if not report:
+            # IMPORTANT: Reîncărcăm obiectul din DB pentru a ne asigura că avem 
+            # prețul și descrierea populate de normalizator înainte de a le da la AI
+            listing.refresh_from_db()
             
-            if raport_existent:
-                # Dacă există deja, nu mai apelăm AI-ul, mergem direct la rezultat
-                return redirect('result_detail', listing_id=listing_de_analizat.id)
-            
-            # 3. Dacă NU are raport, abia atunci apelăm AI-ul lui Alex
+            messages.info(request, "Generăm raportul AI...")
             try:
                 agent = DetectiveAgent()
-                raport_nou = agent.analyze_listing(listing_de_analizat.id, request.user)
+                report = agent.analyze_listing(listing.id, request.user)
                 
-                if raport_nou:
-                    return redirect('result_detail', listing_id=listing_de_analizat.id)
-                else:
-                    # FALLBACK: Dacă AI-ul crapă, creăm unul rapid de test ca să nu dea eroare
-                    Report.objects.create(
-                        listing=listing_de_analizat,
-                        user=request.user,
-                        integrity_score=50,
-                        final_verdict="Creat automat (Eroare AI)"
-                    )
-                    return redirect('result_detail', listing_id=listing_de_analizat.id)
+                if not report:
+                    messages.error(request, "AI-ul a extras datele dar nu a putut genera concluzia.")
+                    return redirect('home')
             except Exception as e:
-                messages.error(request, f"Eroare: {e}")
+                messages.error(request, f"Eroare la procesarea AI: {e}")
+                return redirect('home')
+
+        return redirect('result_detail', listing_id=listing.id)
         
     return redirect('home')

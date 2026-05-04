@@ -20,6 +20,7 @@ services:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
+      PLAYWRIGHT_BROWSERS_PATH: /usr/local/bin/playwright-browsers
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
