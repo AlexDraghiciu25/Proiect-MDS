@@ -17,7 +17,7 @@ class Command(BaseCommand):
 
         with Stealth().use_sync(sync_playwright()) as p:
             browser = p.chromium.launch(
-                headless=False, # Poti pune True cand il muti pe server
+                headless=True, # Poti pune True cand il muti pe server
                 args=["--disable-blink-features=AutomationControlled"]
             ) 
             

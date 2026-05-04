@@ -15,6 +15,13 @@ class Listing(models.Model):
     STRUCTURE_CHOICES = [('beton', 'Beton'), ('caramida', 'Cărămidă'), ('bca', 'BCA'), ('lemn', 'Lemn')]
     ENERGY_CLASS_CHOICES = [('A', 'Clasa A'), ('B', 'Clasa B'), ('C', 'Clasa C'), ('D', 'Clasa D'), ('E', 'Clasa E'), ('F', 'Clasa F'), ('G', 'Clasa G')]
 
+    # --- DEFINIREA STĂRILOR PENTRU BOOLEENE ---
+    STARI_DOTARI = (
+        (True, 'Da'),
+        (False, 'Nu'),
+        (None, 'Nemenționat (NULL)'),
+    )
+
     # --- IDENTIFICATORI ---
     source_url = models.URLField(max_length=500, unique=True)
     source_website = models.CharField(max_length=50, default='Necunoscut')
@@ -53,14 +60,14 @@ class Listing(models.Model):
 
     # --- UTILITĂȚI ȘI CONTORIZARE ---
     heating_type = models.CharField(max_length=50, choices=HEATING_CHOICES, null=True, blank=True)
-    has_underfloor_heating = models.BooleanField(default=False)
-    has_gas = models.BooleanField(default=False)
-    has_electricity = models.BooleanField(default=False)
-    has_water = models.BooleanField(default=False)
-    has_sewage = models.BooleanField(default=False)
-    has_gas_meter = models.BooleanField(default=False)
-    has_water_meter = models.BooleanField(default=False)
-    has_heat_meter = models.BooleanField(default=False)
+    has_underfloor_heating = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
+    has_gas = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
+    has_electricity = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
+    has_water = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
+    has_sewage = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
+    has_gas_meter = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
+    has_water_meter = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
+    has_heat_meter = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
     internet_type = models.CharField(max_length=100, null=True, blank=True)
 
     # --- FINISAJE ---
@@ -72,24 +79,24 @@ class Listing(models.Model):
     thermal_insulation = models.CharField(max_length=100, null=True, blank=True)
 
     # --- ELECTROCASNICE ---
-    has_fridge = models.BooleanField(default=False)
-    has_washing_machine = models.BooleanField(default=False)
-    has_dishwasher = models.BooleanField(default=False)
-    has_tv = models.BooleanField(default=False)
-    has_oven = models.BooleanField(default=False)
-    has_microwave = models.BooleanField(default=False)
-    has_hood = models.BooleanField(default=False)
-    has_ac = models.BooleanField(default=False)
+    has_fridge = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
+    has_washing_machine = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
+    has_dishwasher = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
+    has_tv = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
+    has_oven = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
+    has_microwave = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
+    has_hood = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
+    has_ac = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
 
     # --- FACILITĂȚI IMOBIL & EXTERIOR ---
-    has_intercom = models.BooleanField(default=False)
-    has_elevator = models.BooleanField(default=False)
-    has_video_surveillance = models.BooleanField(default=False)
-    has_parking = models.BooleanField(default=False)
-    is_pet_friendly = models.BooleanField(default=False)
-    street_paved = models.BooleanField(default=False)
-    street_lit = models.BooleanField(default=False)
-    near_public_transit = models.BooleanField(default=False)
+    has_intercom = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
+    has_elevator = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
+    has_video_surveillance = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
+    has_parking = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
+    is_pet_friendly = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
+    street_paved = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
+    street_lit = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
+    near_public_transit = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
 
     # --- DETALII TEHNICE ȘI JURIDICE ---
     energy_class = models.CharField(max_length=2, choices=ENERGY_CLASS_CHOICES, null=True, blank=True)
