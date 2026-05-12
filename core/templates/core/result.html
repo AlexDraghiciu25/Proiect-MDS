@@ -131,14 +131,25 @@
                                     <i class="bi bi-exclamation-triangle me-2"></i>Atenție (Red Flags)
                                 </h4>
                                 <ul class="flag-list list-unstyled">
-                                    {% for flag in report.red_flags %}
-                                    <li class="d-flex mb-2">
-                                        <i class="bi bi-dot fs-4 text-danger"></i>
-                                        <div>{{ flag }}</div>
-                                    </li>
-                                    {% empty %}
-                                    <li class="text-success small">Nu au fost detectate riscuri majore în acest anunț.</li>
-                                    {% endfor %}
+                                    {% if report.red_flags %}
+                                        {% for flag in report.red_flags %}
+                                        <li class="d-flex mb-2">
+                                            <i class="bi bi-exclamation-circle-fill me-2 text-danger"></i>
+                                            <div class="small">{{ flag }}</div>
+                                        </li>
+                                        {% endfor %}
+                                    {% else %}
+                                        {% if listing.data_completeness_score < 80 %}
+                                        <li class="d-flex mb-2">
+                                            <i class="bi bi-info-circle me-2 text-warning"></i>
+                                            <div class="small">Scor diminuat din cauza lipsei unor detalii tehnice complete în anunț.</div>
+                                        </li>
+                                        {% else %}
+                                        <li class="text-success small">
+                                            <i class="bi bi-check-circle-fill me-2"></i>Datele anunțului sunt consistente.
+                                        </li>
+                                        {% endif %}
+                                    {% endif %}
                                 </ul>
                             </div>
                         </div>

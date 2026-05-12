@@ -81,13 +81,14 @@
                             
                             <div class="row g-3 mb-3">
                                 <div class="col-md-6">
-                                    <label class="form-label">Tip Proprietate</label>
-                                    <select name="tip" class="form-select">
-                                        <option value="" selected>Orice tip</option>
-                                        <option value="apartament">Apartament</option>
-                                        <option value="casa">Casă / Vilă</option>
-                                        <option value="cabana">Cabană</option>
-                                    </select>
+                                    <label class="form-label fw-bold small">Compartimentare</label>
+                                        <select name="partitionare" class="form-select">
+                                            <option value="">Toate</option>
+                                            <option value="decomandat" {% if request.GET.partitionare == "decomandat" %}selected{% endif %}>Decomandat</option>
+                                            <option value="semidecomandat" {% if request.GET.partitionare == "semidecomandat" %}selected{% endif %}>Semidecomandat</option>
+                                            <option value="circular" {% if request.GET.partitionare == "circular" %}selected{% endif %}>Circular</option>
+                                            <option value="nedecomandat" {% if request.GET.partitionare == "nedecomandat" %}selected{% endif %}>Nedecomandat</option>
+                                        </select>
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Nr. Camere</label>
@@ -165,19 +166,31 @@
             <h3 class="fw-bold mb-3" style="color: var(--mds-brown);">Asistent AI RentGuru</h3>
             <p class="text-muted mb-4">Ai găsit deja un anunț pe alt site? Introdu link-ul mai jos și AI-ul nostru îl va scana pentru a detecta detalii ascunse, prețul corect și validitatea.</p>
             
-            <form id="analyze-form" action="{% url 'analyze_external' %}" method="POST"> {% csrf_token %}
+            <form id="analyze-form" action="{% url 'analyze_external' %}" method="POST"> 
+                {% csrf_token %}
                 <div class="mb-4">
-                    <label class="form-label">Link-ul proprietății</label>
-                    <div class="input-group">
-                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-link-45deg text-muted"></i></span>
-                        <input type="url" name="external_url" class="form-control border-start-0 ps-0" placeholder="https://..." required>
+                    <label class="form-label fw-bold" style="color: var(--mds-brown);">Link-ul proprietății</label>
+                    <div class="input-group shadow-sm">
+                        <span class="input-group-text bg-white border-end-0">
+                            <i class="bi bi-link-45deg text-muted"></i>
+                        </span>
+                        <input type="url" 
+                            name="external_url" 
+                            class="form-control border-start-0 ps-0" 
+                            placeholder="Lipește link-ul de pe Storia.ro..." 
+                            required 
+                            autocomplete="off">
                     </div>
-                    <div class="form-text mt-2 small">
-                        <i class="bi bi-shield-check text-success"></i> Analizăm date de pe Storia și OLX.
+                    <div class="form-text mt-2 small d-flex align-items-center">
+                        <i class="bi bi-shield-check text-success me-1"></i> 
+                        <span>Analiză AI activă pentru Storia.ro</span>
                     </div>
                 </div>
                 
-                <button type="submit" class="btn btn-custom w-100 shadow-sm" style="background-color: var(--mds-brown); color: white; border: none;">
+                <button type="submit" 
+                        id="btn-magic"
+                        class="btn btn-custom w-100 shadow-sm py-2" 
+                        style="background-color: var(--mds-brown); color: white; border: none; transition: all 0.3s ease;">
                     <i class="bi bi-magic me-2"></i> Analizează Anunțul
                 </button>
             </form>
@@ -270,35 +283,6 @@
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const analyzeForm = document.getElementById('analyze-form');
-    const normalState = document.getElementById('card-content-normal');
-    const loadingState = document.getElementById('card-content-loading');
-    const msgElement = document.getElementById('loading-msg');
-
-    if (analyzeForm) {
-        analyzeForm.addEventListener('submit', function() {
-            normalState.style.display = 'none';
-            loadingState.style.display = 'block';
-
-            const messages = [
-                "Accesăm sursa externă...",
-                "Extragem specificațiile...",
-                "Analizăm prețul pieței...",
-                "Verificăm scorul de încredere...",
-                "Generăm raportul tău..."
-            ];
-            
-            let i = 0;
-            setInterval(() => {
-                i = (i + 1) % messages.length;
-                msgElement.innerText = '"' + messages[i] + '"';
-            }, 2000);
-        });
-    }
-});
-</script>
     <script src="{% static 'js/dashboard.js' %}"></script>
 </body>
 </html>

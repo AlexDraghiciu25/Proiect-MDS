@@ -91,8 +91,23 @@ class Command(BaseCommand):
         page = context.new_page()
 
         try:
-            # Mergem pe pagina
             page.goto(url, wait_until="domcontentloaded", timeout=45000)
+            
+            # --- VALIDARE TITLU (ADĂUGATĂ AICI) ---
+            # Verificăm dacă există h1 și dacă are text valid
+            h1_element = page.locator("h1").first
+            if h1_element.count() == 0:
+                self.stdout.write(self.style.WARNING(f"   Skip: Pagină invalidă/ștearsă (fără H1): {url[:40]}..."))
+                page.close()
+                return
+
+            titlu = h1_element.inner_text().strip()
+            
+            # Dacă titlul e prea scurt sau e doar un placeholder, dăm skip
+            if not titlu or len(titlu) < 5 or titlu.lower() == "fara titlu":
+                self.stdout.write(self.style.WARNING(f"   Skip: Titlu invalid: '{titlu}' la {url[:40]}..."))
+                page.close()
+                return
             
             # --- PASUL 1: SCROLL LENT ---
             # Dăm scroll ca să forțăm site-ul să descarce listele
@@ -197,7 +212,7 @@ class Command(BaseCommand):
 
             # --- SALVAREA ---
             with transaction.atomic():
-                Listing.objects.create(
+                listing = Listing.objects.create(
                     title=f"BRUT: {titlu[:40]}",
                     source_url=url,
                     source_website="Storia.ro",
@@ -213,6 +228,7 @@ class Command(BaseCommand):
                     }
                 )
             self.stdout.write(self.style.SUCCESS(f"   Aspirat complet: {titlu[:30]}..."))
+            return listing
 
         except Exception as e:
             self.stdout.write(self.style.ERROR(f"   Eroare pe pagina anuntului: {e}"))
