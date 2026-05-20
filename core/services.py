@@ -98,12 +98,20 @@ class MapsAgent:
 class DetectiveAgent:
     def __init__(self):
         # Inițializarea noului client Google GenAI
-        self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
-        # Folosim noul model de generație Flash (2.5) care este activ
+        self.api_key = settings.GEMINI_API_KEY
+        if not self.api_key:
+            print("ATENȚIE: GEMINI_API_KEY nu este setată în fișierul .env sau în variabilele de mediu!")
+            self.client = None
+        else:
+            self.client = genai.Client(api_key=self.api_key)
+        
         self.model_id = 'gemini-2.5-flash'
 
     def analyze_listing(self, listing_id, user):
-        data_azi = timezone.now().strftime('%d.%m.%Y')
+        if not self.client:
+            print("Eroare: Analiza AI nu poate rula deoarece clientul GenAI nu a fost inițializat (lipsește cheia API).")
+            return None
+
         try:
             listing = Listing.objects.get(id=listing_id)
         except Listing.DoesNotExist:
@@ -111,6 +119,7 @@ class DetectiveAgent:
             return None
         
         scor_baza = listing.data_completeness_score or 85
+        data_azi = timezone.now().strftime('%d.%m.%Y')
 
         # 1. Obținem datele reale despre zonă de la MapsAgent
         maps_agent = MapsAgent()

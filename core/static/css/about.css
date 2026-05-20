@@ -1,0 +1,149 @@
+:root {
+    --mds-cream: #F9F6F0;       
+    --mds-brown: #5C4033;       
+    --mds-green: #2D4A22;       
+    --mds-text:  #3E2A1F;       
+    
+    --font-logo: 'Carattere', cursive;
+    --font-body: 'Lora', serif;
+}
+
+::selection {
+    background-color: rgba(45, 74, 34, 0.2); 
+    color: inherit; 
+}
+
+body {
+    background-color: var(--mds-cream);
+    color: var(--mds-text);
+    font-family: var(--font-body);
+    margin: 0;
+}
+
+.navbar-custom {
+    background-color: rgba(249, 246, 240, 0.98);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+}
+.navbar-brand {
+    font-family: var(--font-logo);
+    font-size: 2.8rem;
+    color: var(--mds-brown) !important;
+    padding: 0;
+    line-height: 1;
+}
+.nav-link {
+    color: var(--mds-text) !important;
+    font-weight: 500;
+    transition: color 0.3s ease;
+}
+.nav-link:hover, .nav-link.active {
+    color: var(--mds-green) !important;
+}
+
+.about-hero {
+    background: linear-gradient(rgba(92, 64, 51, 0.8), rgba(45, 74, 34, 0.85)), url('https://cdn.pixabay.com/photo/2016/11/18/17/46/house-1836070_1280.jpg') center/cover;
+    padding: 100px 0;
+    color: var(--mds-cream);
+    text-align: center;
+}
+
+.about-title {
+    font-size: 3rem;
+    font-weight: 600;
+    margin-bottom: 15px;
+}
+
+.mission-section {
+    padding: 80px 0;
+}
+
+.mission-text {
+    font-size: 1.15rem;
+    line-height: 1.8;
+    color: var(--mds-text);
+}
+
+.highlight-green {
+    color: var(--mds-green);
+    font-weight: 600;
+}
+
+.team-section {
+    padding: 60px 0 100px 0;
+    background-color: #f2eee6;
+}
+
+.team-card {
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 15px;
+    box-shadow: 0 15px 35px rgba(0,0,0,0.08);
+    transition: transform 0.3s ease;
+    text-align: center;
+    height: 100%;
+}
+
+.team-card:hover {
+    transform: translateY(-10px);
+}
+
+.team-photo-frame {
+    width: 100%;
+    height: 350px;
+    border-radius: 15px;
+    overflow: hidden;
+    margin-bottom: 20px;
+}
+
+.team-photo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.5s ease;
+}
+
+.team-card:hover .team-photo {
+    transform: scale(1.05);
+}
+
+.team-name {
+    font-family: var(--font-body);
+    font-weight: 600;
+    color: var(--mds-brown);
+    font-size: 1.5rem;
+    margin-bottom: 5px;
+}
+
+.team-role {
+    color: var(--mds-green);
+    font-weight: 500;
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.footer-custom {
+    background-color: rgba(249, 246, 240, 0.98);
+    border-top: 1px solid #e2dac9;
+    padding: 40px 0 20px 0;
+    color: var(--mds-text);
+}
+.footer-brand {
+    font-family: var(--font-logo);
+    font-size: 2.2rem;
+    color: var(--mds-brown);
+    text-decoration: none;
+}
+.social-links { display: flex; gap: 15px; }
+.social-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 40px; height: 40px; border-radius: 50%;
+    background-color: #e2dac9; color: var(--mds-brown);
+    font-size: 1.2rem; transition: all 0.3s ease; text-decoration: none;
+}
+.social-icon:hover { transform: translateY(-3px); color: white; }
+.social-icon.fb:hover { background-color: #1877F2; }
+.social-icon.ig:hover { background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%); }
+.social-icon.wa:hover { background-color: #25D366; }
+.footer-divider { border-color: #d4c5b9; margin: 30px 0 20px 0; }
+.footer-text { font-size: 0.9rem; color: var(--mds-brown); margin: 0; }

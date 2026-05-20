@@ -1,0 +1,168 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact - RentGuru</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Carattere&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'css/contact.css' %}">
+</head>
+<body>
+
+    <nav class="navbar navbar-expand-lg navbar-custom sticky-top">
+        <div class="container">
+            <a class="navbar-brand" href="{% url 'home' %}">RentGuru</a>
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <i class="bi bi-list fs-2" style="color: var(--mds-brown);"></i>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0 ms-lg-4">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'home' %}"><i class="bi bi-house-door me-1"></i> Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'history' %}"><i class="bi bi-clock-history me-1"></i> Istoric</a>
+                    </li>
+                    <li class="nav-item ms-lg-2">
+                        <a class="nav-link" href="{% url 'about' %}"><i class="bi bi-info-circle me-1"></i> Despre Noi</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{% url 'contact' %}"><i class="bi bi-envelope me-1"></i> Contact</a>
+                    </li>
+                </ul>
+                <div class="d-flex align-items-center mt-3 mt-lg-0">
+                    <span class="me-3 fw-bold" style="color: var(--mds-brown);">Salut, {{ user.username|default:"Oaspete" }}!</span>
+                    <form action="{% url 'logout' %}" method="post" class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
+                            <i class="bi bi-box-arrow-right me-1"></i> Ieși
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <section class="contact-hero">
+        <div class="container">
+            <h1 class="contact-title">Suntem aici pentru tine</h1>
+            <p class="fs-5 mb-0">Ai o întrebare, un feedback sau ai nevoie de suport? Scrie-ne!</p>
+        </div>
+    </section>
+
+    <section class="contact-section">
+        <div class="container">
+            <div class="row g-5">
+                
+                <div class="col-lg-4">
+                    <div class="row g-4">
+                        <div class="col-12">
+                            <div class="info-card">
+                                <div class="info-icon">
+                                    <i class="bi bi-envelope-paper"></i>
+                                </div>
+                                <h3 class="info-title">Email</h3>
+                                <p class="text-muted mb-0">contact@rentguru.ro<br>suport@rentguru.ro</p>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="info-card">
+                                <div class="info-icon">
+                                    <i class="bi bi-telephone"></i>
+                                </div>
+                                <h3 class="info-title">Telefon</h3>
+                                <p class="text-muted mb-0">+40 7771 146 577<br>Luni - Vineri: 09:00 - 18:00</p>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="info-card">
+                                <div class="info-icon">
+                                    <i class="bi bi-geo-alt"></i>
+                                </div>
+                                <h3 class="info-title">Locație</h3>
+                                <p class="text-muted mb-0">București, România<br>RentGuru HQ, Str. Academiei nr. 14</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-8">
+                    <div class="contact-form-wrapper">
+                        <h2 class="fw-bold mb-4" style="color: var(--mds-brown);">Trimite-ne un mesaj</h2>
+                        
+                        <form action="#" method="POST">
+                            {% csrf_token %}
+                            
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label for="nameInput" class="form-label fw-bold small text-muted">Numele tău</label>
+                                    <input type="text" class="form-control" id="nameInput" placeholder="Ex: Popescu Ion" required>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <label for="emailInput" class="form-label fw-bold small text-muted">Adresa de email</label>
+                                    <input type="email" class="form-control" id="emailInput" placeholder="nume@exemplu.com" required>
+                                </div>
+                                
+                                <div class="col-12">
+                                    <label for="subjectSelect" class="form-label fw-bold small text-muted">Subiect</label>
+                                    <select class="form-select" id="subjectSelect">
+                                        <option selected>Alege un subiect...</option>
+                                        <option value="suport">Problemă tehnică / Suport</option>
+                                        <option value="parteneriat">Propunere de parteneriat</option>
+                                        <option value="feedback">Feedback platformă</option>
+                                        <option value="altul">Altceva</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-12">
+                                    <label for="messageInput" class="form-label fw-bold small text-muted">Mesajul tău</label>
+                                    <textarea class="form-control" id="messageInput" rows="6" placeholder="Cu ce te putem ajuta?" required></textarea>
+                                </div>
+
+                                <div class="col-12 mt-4">
+                                    <button type="submit" class="btn btn-submit w-100 shadow-sm">
+                                        <i class="bi bi-send me-2"></i> Trimite Mesajul
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer-custom">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-md-6 mb-4 mb-md-0 text-center text-md-start">
+                    <a href="{% url 'home' %}" class="footer-brand d-block mb-2">RentGuru</a>
+                    <p class="text-muted small mb-0">Platforma inteligentă pentru găsirea și evaluarea locuințelor.<br>Transformăm închirierea într-o experiență sigură și premium.</p>
+                </div>
+                <div class="col-md-6 text-center text-md-end">
+                    <p class="fw-bold mb-2" style="color: var(--mds-brown);">Urmărește-ne</p>
+                    <div class="social-links justify-content-center justify-content-md-end">
+                        <a href="https://www.facebook.com/profile.php?id=61574339169340" class="social-icon fb" title="Facebook"><i class="bi bi-facebook"></i></a>
+                        <a href="https://www.instagram.com/rentguru.ro/" class="social-icon ig" title="Instagram"><i class="bi bi-instagram"></i></a>
+                        <a href="https://wa.me/40771146577" class="social-icon wa" title="WhatsApp"><i class="bi bi-whatsapp"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="footer-divider">
+            <div class="text-center">
+                <p class="footer-text">&copy; 2026 RentGuru. Toate drepturile rezervate.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
