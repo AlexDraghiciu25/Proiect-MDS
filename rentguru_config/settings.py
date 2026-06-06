@@ -78,11 +78,11 @@ WSGI_APPLICATION = 'rentguru_config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'RENTGURU',
-        'USER': 'postgres',
-        'PASSWORD': 'alex1234',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'NAME': os.environ.get('DB_NAME'),
+        'USER': os.environ.get('DB_USER'),
+        'PASSWORD': os.environ.get('DB_PASSWORD'),
+        'HOST': 'db',      # ← numele serviciului din docker-compose, NU localhost
+        'PORT': '5432',    # ← portul intern Docker, NU 5433
     }
 }
 

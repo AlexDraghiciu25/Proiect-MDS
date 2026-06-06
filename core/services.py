@@ -7,92 +7,99 @@ from .models import Listing, Report
 from django.utils import timezone
 
 class MapsAgent:
-    """
-    Agent avansat pentru analiza geospațială. 
-    Transformă o adresă în coordonate GPS (Geocoding) și caută Puncte de Interes (POI) 
-    într-o anumită rază folosind Google Maps APIs.
-    """
     def __init__(self):
-        self.api_key = getattr(settings, 'MAPS_API_KEY', '')
-        self.geocode_url = "https://maps.googleapis.com/maps/api/geocode/json"
-        self.places_url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
+        self.geocode_url = "https://nominatim.openstreetmap.org/search"
+        self.places_url = "https://overpass.kumi.systems/api/interpreter"
 
     def get_coordinates(self, location_text):
-        """Transformă textul zonei în coordonate (Lat, Lng)"""
-        if not self.api_key:
-            print("MapsAgent [Eroare]: Cheia MAPS_API_KEY nu este setată.")
-            return None, None
-            
-        params = {'address': location_text, 'key': self.api_key}
+        params = {
+            'q': location_text,
+            'format': 'json',
+            'limit': 1
+        }
+        headers = {'User-Agent': 'RentGuru/1.0'}
         try:
-            response = requests.get(self.geocode_url, params=params, timeout=5)
-            if response.status_code == 200 and response.json().get('status') == 'OK':
-                location = response.json()['results'][0]['geometry']['location']
-                return location['lat'], location['lng']
+            response = requests.get(self.geocode_url, params=params, headers=headers, timeout=5)
+            results = response.json()
+            if results:
+                return float(results[0]['lat']), float(results[0]['lon'])
         except Exception as e:
             print(f"MapsAgent [Geocoding Error]: {e}")
         return None, None
 
     def get_pois(self, city, neighborhood):
-        if not self.api_key:
-            return "Analiza proximității este dezactivată (lipsă MAPS_API_KEY)."
-
         if not city or not neighborhood:
             return "Locație insuficient definită."
 
         query_location = f"{neighborhood}, {city}"
         lat, lng = self.get_coordinates(query_location)
-        
+
         if not lat or not lng:
             return f"Nu s-au putut obține coordonatele GPS pentru {query_location}."
 
-        # Definim categoriile extinse și tipurile de căutare recunoscute de Google Places API
+        raza = 1500
+        headers = {'User-Agent': 'RentGuru/1.0'}
+
         poi_categories = [
-            {"nume": "Transport", "types": "subway_station|bus_station|transit_station"},
-            {"nume": "Comercial", "types": "supermarket|shopping_mall|convenience_store"},
-            {"nume": "Educație", "types": "school|primary_school|university"},
-            {"nume": "Sănătate", "types": "hospital|pharmacy"},
-            {"nume": "Recreere", "types": "park|gym|restaurant|cafe"},
-            {"nume": "Bănci & Utilități", "types": "bank|atm"}
+            {"nume": "Transport", "amenity": "bus_stop"},
+            {"nume": "Comercial", "shop": "supermarket"},
+            {"nume": "Educație", "amenity": "school"},
+            {"nume": "Sănătate", "amenity": "pharmacy"},
+            {"nume": "Recreere", "amenity": "park"},
+            {"nume": "Bănci", "amenity": "bank"},
         ]
-        
+
         rezultate_analiza = {}
-        raza_cautare_metri = 1500 # Căutăm pe o rază de 1.5 km
 
         for cat in poi_categories:
-            nume_cat = cat["nume"]
-            rezultate_analiza[nume_cat] = []
+            nume = cat.pop("nume")
+            key, value = list(cat.items())[0]
+            rezultate_analiza[nume] = []
 
-            # --- CERERE REALĂ CĂTRE GOOGLE PLACES NEARBY SEARCH ---
             params = {
-                'location': f"{lat},{lng}",
-                'radius': raza_cautare_metri,
-                'type': cat["types"].split('|')[0], # Folosim primul tip ca bază, Google permite un type principal
-                'key': self.api_key
+                'format': 'json',
+                'limit': 4,
+                'lat': lat,
+                'lon': lng,
+                'radius': raza,
+                f'tag[{key}]': value,
+                'q': value,
+                'bounded': 1,
+                'viewbox': f"{lng-0.02},{lat+0.02},{lng+0.02},{lat-0.02}",
             }
-            try:
-                response = requests.get(self.places_url, params=params, timeout=5)
-                if response.status_code == 200:
-                    results = response.json().get('results', [])
-                    # Luăm top 4 locații din categoria respectivă
-                    top_locatii = [place.get('name') for place in results[:4]]
-                    if top_locatii:
-                        rezultate_analiza[nume_cat] = top_locatii
-            except Exception as e:
-                print(f"MapsAgent [Places Error] pt {nume_cat}: {e}")
 
-        # Curățăm categoriile goale
+            try:
+                response = requests.get(
+                    "https://nominatim.openstreetmap.org/search",
+                    params={
+                        'q': f"{value} near {neighborhood} {city}",
+                        'format': 'json',
+                        'limit': 4,
+                        'bounded': 1,
+                        'viewbox': f"{lng-0.02},{lat+0.02},{lng+0.02},{lat-0.02}",
+                    },
+                    headers=headers,
+                    timeout=8
+                )
+                results = response.json()
+                for r in results:
+                    name = r.get('display_name', '').split(',')[0]
+                    if name and name not in rezultate_analiza[nume]:
+                        rezultate_analiza[nume].append(name)
+            except Exception as e:
+                print(f"MapsAgent [Nominatim Error] {nume}: {e}")
+
         rezultate_analiza = {k: v for k, v in rezultate_analiza.items() if v}
 
-        if not rezultate_analiza and self.api_key:
-            return "Nu s-au putut identifica puncte de interes în această zonă."
-            
-        raport = f"Analiza Hărții (Rază {raza_cautare_metri}m) pentru centrul cartierului {query_location} ({lat}, {lng}):\n"
+        if not rezultate_analiza:
+            return f"Zona {query_location} ({lat:.4f}, {lng:.4f}) identificată, dar nu s-au găsit POI-uri specifice."
+
+        raport = f"Analiza Hărții (Rază {raza}m) pentru {query_location} ({lat:.4f}, {lng:.4f}):\n"
         for categorie, locatii in rezultate_analiza.items():
             raport += f"► {categorie}:\n"
             for loc in locatii:
                 raport += f"   - {loc}\n"
-            
+
         return raport
 
 class DetectiveAgent:
