@@ -246,41 +246,43 @@ def run_analysis_view(request, listing_id):
 
 # core/views.py
 
+@login_required # <--- Acest decorator forțează logarea obligatorie
 def analyze_external(request):
     if request.method == 'POST':
         url_extern = request.POST.get('external_url', '').strip()
         
-        # 1. Căutăm dacă există deja
+        # 1. Căutăm dacă anunțul există deja în baza de date
         listing = Listing.objects.filter(source_url=url_extern).first()
         
         # 2. Dacă NU există, facem SCRAPE + NORMALIZARE
         if not listing:
             messages.info(request, "Anunț nou detectat. Pornim scanarea...")
-            # Această funcție (din utils.py) trebuie să returneze listing-ul GATA NORMALIZAT
             listing = scrape_single_url(url_extern)
             
             if not listing:
                 messages.error(request, "Scraper-ul nu a putut accesa link-ul.")
                 return redirect('home')
 
-        # 3. Verificăm dacă are REPORT (Analiza AI)
+        # 3. Verificăm dacă are deja un raport AI generat
         report = Report.objects.filter(listing=listing).first()
         
-        # 4. Dacă nu are raport, sau dacă raportul existent are erori (opțional), rulăm AI
+        # 4. Dacă nu are raport, rulăm procesarea AI securizată cu userul logat
         if not report:
-            # IMPORTANT: Reîncărcăm obiectul din DB pentru a ne asigura că avem 
-            # prețul și descrierea populate de normalizator înainte de a le da la AI
+            # Reîncărcăm obiectul din DB pentru a avea datele proaspăt normalizate
             listing.refresh_from_db()
             
             messages.info(request, "Generăm raportul AI...")
             try:
                 agent = DetectiveAgent()
+                # Pasăm cu încredere request.user pentru că garantat avem un utilizator autentificat
                 report = agent.analyze_listing(listing.id, request.user)
                 
                 if not report:
                     messages.error(request, "AI-ul a extras datele dar nu a putut genera concluzia.")
                     return redirect('home')
             except Exception as e:
+                # Afișăm eroarea în terminalul Docker pentru depanare rapidă
+                print(f"------------ EROARE CRITICĂ AI ------------\n{e}\n-----------------------------------------")
                 messages.error(request, f"Eroare la procesarea AI: {e}")
                 return redirect('home')
 

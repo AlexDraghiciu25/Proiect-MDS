@@ -9,7 +9,6 @@ class DetectiveAgent:
     def __init__(self):
         # Inițializarea noului client Google GenAI
         self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
-        # Folosim noul model de generație Flash (2.5) care este activ
         self.model_id = 'gemini-2.5-flash'
 
     def analyze_listing(self, listing_id, user):
@@ -21,37 +20,46 @@ class DetectiveAgent:
             return None
         
         scor_baza = listing.data_completeness_score or 85
+        
+        # Presupunem că ai salvat avertismentele generate de tool-ul nostru 
+        # într-un câmp de tip JSON (ex: validation_warnings) sau le recalculezi aici.
+        # Dacă nu, poți lăsa doar scorul, dar e mai sigur să i le dai.
+        alerte_sistem = getattr(listing, 'validation_warnings', [])
+        alerte_text = ", ".join([w.get('message', '') for w in alerte_sistem]) if alerte_sistem else "Nu sunt alerte critice."
 
         prompt = f"""
             Ești un consultant imobiliar senior din România, specializat în analiza de piață. 
-            Analizează acest anunț pornind de la un Index de Încredere de bază de {scor_baza}%.
+            Analizează acest anunț pornind de la un Index de Completitudine a Datelor de {scor_baza}%.
 
             DATE ANUNȚ:
             Locație: {listing.city}, {listing.neighborhood}
             Titlu: {listing.title} 
-            Preț: {listing.price} {listing.currency}
+            Preț total: {listing.price} {listing.currency}
+            Suprafață utilă: {getattr(listing, 'useful_surface', 'N/A')} mp
             Descriere: {listing.description}
             Specificații tehnice: {listing.raw_data.get('site_specs', 'N/A')}
+            Alerte sistem (lipsă date): {alerte_text}
 
             INSTRUCȚIUNI CRITICE PENTRU SCOR ȘI FLAGS:
-            1. Scorul final trebuie să reflecte acuratețea și completitudinea datelor. 
-            2. Dacă scorul final este sub 90%, ești OBLIGAT să incluzi în lista "flags" motivele pentru care s-au pierdut puncte (ex: "Număr de camere nespecificat", "Lipsă detalii etaj", "Descriere sumară").
-            3. NU scădea puncte pentru lipsa contactului telefonic (e gestionat de platformă).
-            4. Scade din scorul de {scor_baza}% DOAR dacă identifici contradicții (ex: etaj greșit) sau preț suspect (peste 50% sub medie).
-            5. Dacă prețul este cu 10-20% sub medie, etichetează-l ca "Ofertă competitivă" în verdict, nu ca risc.
-            6. Data curentă: {data_azi}. Ignoră eroarea "dată în viitor" pentru ziua de azi.
+            1. Calculează mental prețul per metru pătrat (Preț total / Suprafață utilă). Bazează-ți TOATĂ analiza financiară pe această valoare.
+            2. Scade din scorul de {scor_baza}% DOAR dacă identifici contradicții logice în text (ex: scrie etaj 1, dar în descriere e parter) sau un preț suspect/fals.
+            3. Include în lista "flags" alertele de sistem primite mai sus, dar adaugă și propriile tale descoperiri (ex: "Descriere prea sumară", "Posibil apartament la demisol").
+            4. NU scădea puncte pentru lipsa contactului telefonic.
+            5. Dacă prețul per metru pătrat este cu 10-20% sub media zonei {listing.neighborhood}, etichetează-l ca "Ofertă competitivă" în verdict.
+            6. Data curentă: {data_azi}.
 
             Returnează DOAR un JSON valid:
             {{
                 "score": <int_scor_ajustat_pornind_de_la_{scor_baza}>,
-                "flags": ["listă_cu_riscuri_SAU_lipsuri_tehnice_care_justifică_scorul"],
-                "proximity": "analiză_facilități_și_zgomot",
+                "flags": ["listă_cu_riscuri_SAU_lipsuri_tehnice"],
+                "proximity": "analiză_facilități_și_zgomot_din_zona_{listing.neighborhood}",
                 "price_analysis": {{
-                    "average_zone_price": <int_valoare_medie_estimată_în_{listing.currency}>,
+                    "price_per_sqm": <float_calculat>,
+                    "average_zone_price_sqm": <int_valoare_medie_estimată_pe_mp_în_{listing.currency}>,
                     "difference_percentage": <int_procent_pozitiv_sau_negativ>,
                     "label": "ex: Preț conform pieței / Ofertă excelentă / Peste media zonei"
                 }},
-                "verdict": "concluzie_echilibrată_care_explică_și_scorul_dacă_e_mic"
+                "verdict": "concluzie_echilibrată_care_explică_și_scorul"
             }}
             """
 

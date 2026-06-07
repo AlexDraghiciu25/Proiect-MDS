@@ -1,6 +1,7 @@
 import re
 import unicodedata
 from datetime import datetime
+from dateutil import parser
 from django.utils import timezone
 from django.core.management.base import BaseCommand
 from core.models import Listing
@@ -8,9 +9,17 @@ from core.models import Listing
 class Command(BaseCommand):
     help = 'Motor avansat de normalizare ELT'
 
+    def add_arguments(self, parser):
+        parser.add_argument('--listing_id', type=int, help='ID-ul unui singur anunt pentru normalizare on-the-fly')
+
     def handle(self, *args, **options):
+        listing_id = options.get('listing_id')
+    
+        if listing_id:
+            pending_listings = Listing.objects.filter(id=listing_id)
+        else:
+            pending_listings = Listing.objects.filter(processing_status='PENDING')
         #pending_listings = Listing.objects.filter(processing_status='PENDING')
-        pending_listings = Listing.objects.all()
 
         count = pending_listings.count()
         
@@ -101,7 +110,7 @@ class Command(BaseCommand):
             def extrage_numar_sau_standard(keywords, is_balcon=False):
                 kw_pattern = r'(?:' + '|'.join(keywords) + r')'
                 if is_balcon:
-                    regex_str = rf'(?:{kw_pattern}[\s:]*(\d+)(?!.*(?:mp|m2|metri))|(\d+)\s*{kw_pattern})'
+                    regex_str = rf'(?:{kw_pattern}[\s:]*(\d+)(?!.*(?:mp|m2|metri|m²|m)))|(\d+)\s*{kw_pattern}'
                 else:
                     regex_str = rf'(?:{kw_pattern}[\s:]*(\d+)|(\d+)\s*{kw_pattern})'
 
@@ -138,12 +147,12 @@ class Command(BaseCommand):
             bucatarii_curat = extrage_numar_sau_standard(['bucatarie', 'bucatarii'])
 
             suprafata_curata = None
-            match_suprafata = re.search(r'(?:suprafata utila|suprafata)[\s:\-]*(?:de\s+)?(\d+)\s*(?:mp|m2|m²)', text_total)            
+            match_suprafata = re.search(r'(?:suprafata utila|suprafata)[\s:\-]*(?:de\s+)?(\d+)\s*(?:mp|m2|m²|m|metri)', text_total)            
             if match_suprafata:
                 val = match_suprafata.group(1)
                 if val: suprafata_curata = float(val)
             else:
-                match_suprafata = re.search(r'(?:suprafata utila|suprafata).{0,20}?(?:de\s+)?(\d+)\s*(?:mp|m2|m²)', text_total) 
+                match_suprafata = re.search(r'(?:suprafata utila|suprafata).{0,20}?(?:de\s+)?(\d+)\s*(?:mp|m2|m²|m|metri)', text_total) 
                 if match_suprafata:
                     val = match_suprafata.group(1)
                     if val: suprafata_curata = float(val)
