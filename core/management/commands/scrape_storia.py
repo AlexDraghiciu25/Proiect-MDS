@@ -1,6 +1,7 @@
 import os
 import time
 import random
+import re
 from django.core.management.base import BaseCommand
 from core.models import Listing
 from playwright.sync_api import sync_playwright
@@ -8,7 +9,7 @@ from playwright_stealth import Stealth
 from django.db import transaction
 
 class Command(BaseCommand):
-    help = 'Scraper robust pentru Storia.ro (Izolare pe Tab-uri, Heuristic Extraction, Lazy Loading)'
+    help = 'Scraper robust pentru Storia.ro (Izolare pe Tab-uri, Heuristic Extraction, Lazy Loading, Auto-Populare)'
 
     def handle(self, *args, **options):
         # Permitem operatiunile asincrone in Django
@@ -93,8 +94,7 @@ class Command(BaseCommand):
         try:
             page.goto(url, wait_until="domcontentloaded", timeout=45000)
             
-            # --- VALIDARE TITLU (ADĂUGATĂ AICI) ---
-            # Verificăm dacă există h1 și dacă are text valid
+            # --- VALIDARE TITLU ---
             h1_element = page.locator("h1").first
             if h1_element.count() == 0:
                 self.stdout.write(self.style.WARNING(f"   Skip: Pagină invalidă/ștearsă (fără H1): {url[:40]}..."))
@@ -103,14 +103,12 @@ class Command(BaseCommand):
 
             titlu = h1_element.inner_text().strip()
             
-            # Dacă titlul e prea scurt sau e doar un placeholder, dăm skip
             if not titlu or len(titlu) < 5 or titlu.lower() == "fara titlu":
                 self.stdout.write(self.style.WARNING(f"   Skip: Titlu invalid: '{titlu}' la {url[:40]}..."))
                 page.close()
                 return
             
             # --- PASUL 1: SCROLL LENT ---
-            # Dăm scroll ca să forțăm site-ul să descarce listele
             page.evaluate("""
                 var interval = setInterval(function() { window.scrollBy(0, 400); }, 300);
                 setTimeout(function() { clearInterval(interval); }, 2500);
@@ -135,7 +133,6 @@ class Command(BaseCommand):
             }""")
 
             # --- PASUL 2: DESCHIDEREA ACORDEOANELOR ---
-            # Caută butoanele după text și dă click pe ele prin JS clasic
             page.evaluate("""function() {
                 var butoane = document.querySelectorAll('button, div[role="button"]');
                 for(var i=0; i<butoane.length; i++) {
@@ -146,18 +143,14 @@ class Command(BaseCommand):
                 }
             }""")
             
-            # Așteptăm 2 secunde pentru ca animația de la acordeon să se deschidă complet
             time.sleep(2)
 
             # --- PASUL 3: CITIREA DATELOR "LA SÂNGE" ---
-            # Tragem tot textul din zona de specificații, rând cu rând
             specs_brute = page.evaluate("""function() {
-                // Găsim cutia mare care ține toate datele
                 var container = document.querySelector('[data-testid="ad-details"]') || 
                                 document.querySelector('[data-cy="adPageAdFeatures"]');
                 
                 if(!container) {
-                    // Dacă au schimbat clasele, căutăm ancora "Suprafață utilă:" și urcăm în structură
                     var divs = document.querySelectorAll('div');
                     for(var i=0; i<divs.length; i++) {
                         if(divs[i].innerText === 'Suprafață utilă:') {
@@ -168,20 +161,16 @@ class Command(BaseCommand):
                 }
                 
                 if(container) {
-                    // container.innerText ia textul EXTRAT cum arată pe ecran (inclusiv "frigider" etc.)
-                    // Folosim dublu backslash pentru Python
                     var linii = container.innerText.split('\\n'); 
                     var texte_valide = [];
                     
                     for(var i=0; i<linii.length; i++) {
                         var linie = linii[i].trim();
-                        // Eliminăm gunoaiele și rândurile goale
                         if(linie.length > 1 && linie.length < 80) {
                             texte_valide.push(linie);
                         }
                     }
                     
-                    // Eliminăm duplicatele
                     var elemente_unice = [];
                     for(var j=0; j<texte_valide.length; j++) {
                         if(elemente_unice.indexOf(texte_valide[j]) === -1) {
@@ -210,13 +199,130 @@ class Command(BaseCommand):
                 elif src and 'image;s=' not in src:
                     imagini_brute.append(src)
 
-            # --- SALVAREA ---
+            # ====================================================
+            # --- ALGORITM DE FILTRARE ȘI AUTO-POPULARE ---
+            # ====================================================
+            text_total_analiza = f"{titlu} {descriere} {specs_brute}".lower()
+
+            # 1. Număr de camere
+            camere_detectate = None
+            if "garsonier" in text_total_analiza or "1 camer" in text_total_analiza:
+                camere_detectate = 1
+            elif "2 camer" in text_total_analiza or "doua camer" in text_total_analiza:
+                camere_detectate = 2
+            elif "3 camer" in text_total_analiza or "trei camer" in text_total_analiza:
+                camere_detectate = 3
+            elif "4 camer" in text_total_analiza or "patru camer" in text_total_analiza:
+                camere_detectate = 4
+
+            # 2. Etaj și Regim de înălțime (Total Etaje)
+            etaj_detectat = None
+            if "etaj p" in text_total_analiza or "parter" in text_total_analiza or "etaj parter" in text_total_analiza:
+                etaj_detectat = "P"
+            else:
+                match_etaj = re.search(r'etaj(?:ul)?\s*(\d+|p|m|mansarda)', text_total_analiza)
+                if match_etaj:
+                    etaj_detectat = match_etaj.group(1).upper()
+
+            total_etaje_detectat = None
+            match_total_etaje = re.search(r'(?:p|etaj\s*\d+)\+(\d+)', text_total_analiza)
+            if match_total_etaje:
+                try: total_etaje_detectat = int(match_total_etaje.group(1))
+                except: pass
+            else:
+                # Căutăm structuri de genul "bloc cu 4 etaje" sau "imobil p+4"
+                match_regim = re.search(r'(?:regim\s*de\s*inaltime\s*|bloc\s*cu\s*|imobil\s*)(?:p\+)?(\d+)\s*etaj', text_total_analiza)
+                if match_regim:
+                    try: total_etaje_detectat = int(match_regim.group(1))
+                    except: pass
+
+            # 3. Suprafața Utilă
+            suprafata_detectata = None
+            match_suprafata = re.search(r'(\d+(?:[.,]\d+)?)\s*(?:mp|m\s*patrati|metri\s*patrati|suprafata\s*utila)', text_total_analiza)
+            if match_suprafata:
+                try:
+                    val_suprafata = match_suprafata.group(1).replace(',', '.')
+                    suprafata_detectata = float(val_suprafata)
+                except: pass
+
+            # 4. Opțiuni predefinite conforme cu CHOICES din model
+            compartimentare = None
+            if "semidecomandat" in text_total_analiza: compartimentare = "semidecomandat"
+            elif "decomandat" in text_total_analiza: compartimentare = "decomandat"
+            elif "nedecomandat" in text_total_analiza: compartimentare = "nedecomandat"
+            elif "circular" in text_total_analiza: compartimentare = "circular"
+
+            stare_mobilier = None
+            if "partial mobilat" in text_total_analiza: stare_mobilier = "partial"
+            elif "nemobilat" in text_total_analiza: stare_mobilier = "nemobilat"
+            elif "mobilat" in text_total_analiza or "utilat" in text_total_analiza: stare_mobilier = "mobilat"
+
+            tip_incalzire = None
+            if "centrala proprie" in text_total_analiza or "centrala termica" in text_total_analiza: tip_incalzire = "centrala_proprie"
+            elif "termoficare" in text_total_analiza or "radet" in text_total_analiza: tip_incalzire = "termoficare"
+            elif "centrala de imobil" in text_total_analiza or "centrala imobil" in text_total_analiza: tip_incalzire = "centrala_imobil"
+
+            comfort = None
+            if "lux" in text_total_analiza: comfort = "lux"
+            elif "confort 1" in text_total_analiza or "conf 1" in text_total_analiza: comfort = "1"
+            elif "confort 2" in text_total_analiza or "conf 2" in text_total_analiza: comfort = "2"
+
+            # 5. Funcție ajutătoare pentru maparea stărilor booleene (True/None)
+            def detecteaza_dotare(cuvinte_cheie):
+                if any(cuvant in text_total_analiza for cuvant in cuvinte_cheie):
+                    return True
+                return None
+
+            # --- CURĂȚARE PREȚ INAINTE DE SALVARE ---
+            pret_curat = None
+            if pret and pret != "N/A":
+                cifre_pret = ''.join(c for c in pret if c.isdigit() or c == '.' or c == ',')
+                if ',' in cifre_pret and '.' in cifre_pret:
+                    cifre_pret = cifre_pret.replace('.', '').replace(',', '.')
+                elif ',' in cifre_pret:
+                    cifre_pret = cifre_pret.replace(',', '.')
+                try: pret_curat = float(cifre_pret)
+                except ValueError: pret_curat = None
+
+            # --- SALVAREA CURATĂ ȘI POPULATĂ ÎN MODEL ---
             with transaction.atomic():
                 listing = Listing.objects.create(
-                    title=f"BRUT: {titlu[:40]}",
+                    title=titlu[:255] if titlu and titlu != "Fara titlu" else "Anunț Storia",
+                    description=descriere if descriere != "N/A" else "",
+                    price=pret_curat,
+                    currency="EUR" if "eur" in pret.lower() else "RON",
+                    city="Bucuresti",
+                    neighborhood=locatie.replace("Bucuresti,", "").strip() if locatie != "N/A" else "",
                     source_url=url,
                     source_website="Storia.ro",
-                    processing_status='PENDING',
+                    processing_status='PROCESSED',
+                    
+                    # --- DATE GENERALE ȘI CARACTERISTICI ---
+                    rooms=camere_detectate,
+                    floor=etaj_detectat,
+                    total_floors=total_etaje_detectat,
+                    useful_surface=suprafata_detectata,
+                    partitioning=compartimentare,
+                    comfort_level=comfort,
+                    furnishing_state=stare_mobilier,
+                    heating_type=tip_incalzire,
+
+                    # --- ELECTROCASNICE DETECTATE ---
+                    has_fridge=detecteaza_dotare(["frigider", "combina frigorifica", "utilata", "utilat"]),
+                    has_washing_machine=detecteaza_dotare(["masina de spalat", "masina spalat rufe", "utilata"]),
+                    has_dishwasher=detecteaza_dotare(["masina de spalat vase", "masina spalat vase", "dishwasher"]),
+                    has_tv=detecteaza_dotare(["televizor", "tv", "smart tv"]),
+                    has_ac=detecteaza_dotare(["aer conditionat", "ac", "climatizare", "vortice"]),
+                    has_oven=detecteaza_dotare(["cuptor", "aragaz", "plita"]),
+                    has_microwave=detecteaza_dotare(["microunde", "cuptor microunde"]),
+
+                    # --- FACILITĂȚI IMOBIL & EXTERIOR ---
+                    has_elevator=detecteaza_dotare(["lift", "elevator"]),
+                    has_intercom=detecteaza_dotare(["interfon", "videointerfon"]),
+                    has_parking=detecteaza_dotare(["parcare", "loc parcare", "garaj", "loc de parcare"]),
+                    is_pet_friendly=detecteaza_dotare(["accepta animale", "pet friendly", "animale de companie"]),
+                    near_public_transit=detecteaza_dotare(["metrou", "stb", "autobuz", "tramvai", "statie"]),
+
                     raw_data={
                         "site_title": titlu,
                         "site_price": pret,
@@ -227,7 +333,8 @@ class Command(BaseCommand):
                         "scraped_at": time.strftime("%Y-%m-%d %H:%M:%S")
                     }
                 )
-            self.stdout.write(self.style.SUCCESS(f"   Aspirat complet: {titlu[:30]}..."))
+            
+            self.stdout.write(self.style.SUCCESS(f"   Aspirat și populat local: {titlu[:30]}..."))
             return listing
 
         except Exception as e:
