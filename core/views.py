@@ -1,3 +1,5 @@
+import threading
+import uuid
 from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, authenticate, logout
@@ -10,6 +12,10 @@ from .services import DetectiveAgent
 from .utils import scrape_single_url
 from django.utils import timezone
 from django.core.paginator import Paginator
+
+# Task tracker pentru procesarea asincronă
+# Format: {task_id: {'status': 'processing'|'done'|'error', 'listing_id': int|None, 'error': str|None, 'step': str}}
+_analysis_tasks = {}
 
 # ==========================================
 # 1. AUTENTIFICARE
@@ -201,46 +207,116 @@ def run_analysis_view(request, listing_id):
 
 # core/views.py
 
-@login_required # <--- Acest decorator forțează logarea obligatorie
+def _run_analysis_background(task_id, url_extern, user_id):
+    """
+    Worker care rulează în background thread:
+    scraping → normalizare → analiză AI.
+    Actualizează _analysis_tasks cu statusul curent.
+    """
+    from django.contrib.auth.models import User
+    
+    try:
+        # Pasul 1: Verificare dacă există deja
+        _analysis_tasks[task_id]['step'] = 'Verificăm baza de date...'
+        listing = Listing.objects.filter(source_url=url_extern).first()
+        
+        # Pasul 2: Scraping + Normalizare
+        if not listing:
+            _analysis_tasks[task_id]['step'] = 'Scanăm anunțul...'
+            listing = scrape_single_url(url_extern)
+            
+            if not listing:
+                _analysis_tasks[task_id]['status'] = 'error'
+                _analysis_tasks[task_id]['error'] = 'Scraper-ul nu a putut accesa link-ul.'
+                return
+
+        _analysis_tasks[task_id]['listing_id'] = listing.id
+        
+        # Pasul 3: Verificare raport existent
+        report = Report.objects.filter(listing=listing).first()
+        
+        if not report:
+            listing.refresh_from_db()
+            
+            _analysis_tasks[task_id]['step'] = 'Analizăm datele cu AI...'
+            
+            user = User.objects.get(id=user_id)
+            agent = DetectiveAgent()
+            report = agent.analyze_listing(listing.id, user)
+            
+            if not report:
+                _analysis_tasks[task_id]['status'] = 'error'
+                _analysis_tasks[task_id]['error'] = 'AI-ul a extras datele dar nu a putut genera concluzia.'
+                return
+        
+        _analysis_tasks[task_id]['step'] = 'Finalizăm raportul...'
+        _analysis_tasks[task_id]['status'] = 'done'
+        _analysis_tasks[task_id]['listing_id'] = listing.id
+        
+    except Exception as e:
+        print(f"------------ EROARE CRITICĂ AI (Background) ------------\n{e}\n-----------------------------------------")
+        _analysis_tasks[task_id]['status'] = 'error'
+        _analysis_tasks[task_id]['error'] = str(e)
+
+
+@login_required
 def analyze_external(request):
     if request.method == 'POST':
         url_extern = request.POST.get('external_url', '').strip()
         
-        # 1. Căutăm dacă anunțul există deja în baza de date
+        # Fast-path: dacă anunțul + raportul există deja, redirecționăm instant
         listing = Listing.objects.filter(source_url=url_extern).first()
+        if listing:
+            report = Report.objects.filter(listing=listing).first()
+            if report:
+                return redirect('result_detail', listing_id=listing.id)
         
-        # 2. Dacă NU există, facem SCRAPE + NORMALIZARE
-        if not listing:
-            messages.info(request, "Anunț nou detectat. Pornim scanarea...")
-            listing = scrape_single_url(url_extern)
-            
-            if not listing:
-                messages.error(request, "Scraper-ul nu a putut accesa link-ul.")
-                return redirect('home')
-
-        # 3. Verificăm dacă are deja un raport AI generat
-        report = Report.objects.filter(listing=listing).first()
+        # Generăm un task ID unic și pornim procesarea în background
+        task_id = str(uuid.uuid4())
+        _analysis_tasks[task_id] = {
+            'status': 'processing',
+            'listing_id': None,
+            'error': None,
+            'step': 'Inițializăm scanarea...'
+        }
         
-        # 4. Dacă nu are raport, rulăm procesarea AI securizată cu userul logat
-        if not report:
-            # Reîncărcăm obiectul din DB pentru a avea datele proaspăt normalizate
-            listing.refresh_from_db()
-            
-            messages.info(request, "Generăm raportul AI...")
-            try:
-                agent = DetectiveAgent()
-                # Pasăm cu încredere request.user pentru că garantat avem un utilizator autentificat
-                report = agent.analyze_listing(listing.id, request.user)
-                
-                if not report:
-                    messages.error(request, "AI-ul a extras datele dar nu a putut genera concluzia.")
-                    return redirect('home')
-            except Exception as e:
-                # Afișăm eroarea în terminalul Docker pentru depanare rapidă
-                print(f"------------ EROARE CRITICĂ AI ------------\n{e}\n-----------------------------------------")
-                messages.error(request, f"Eroare la procesarea AI: {e}")
-                return redirect('home')
-
-        return redirect('result_detail', listing_id=listing.id)
+        thread = threading.Thread(
+            target=_run_analysis_background,
+            args=(task_id, url_extern, request.user.id),
+            daemon=True
+        )
+        thread.start()
+        
+        # Redirecționăm INSTANT către pagina de loading
+        return redirect(f'/loading/{task_id}/')
         
     return redirect('home')
+
+
+def loading_view(request, task_id):
+    """Pagina de loading cu animație — se actualizează automat via polling."""
+    return render(request, 'core/loading.html', {'task_id': task_id})
+
+
+def task_status_api(request, task_id):
+    """API endpoint JSON polled de loading.html la fiecare 2 secunde."""
+    task = _analysis_tasks.get(task_id)
+    
+    if not task:
+        return JsonResponse({'status': 'error', 'error': 'Task inexistent.'})
+    
+    response_data = {
+        'status': task['status'],
+        'step': task.get('step', ''),
+        'error': task.get('error'),
+    }
+    
+    if task['status'] == 'done' and task.get('listing_id'):
+        response_data['redirect_url'] = f"/result/{task['listing_id']}/"
+        # Curățăm task-ul din memorie
+        del _analysis_tasks[task_id]
+    elif task['status'] == 'error':
+        # Curățăm și la eroare
+        del _analysis_tasks[task_id]
+    
+    return JsonResponse(response_data)

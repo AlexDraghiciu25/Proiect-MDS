@@ -13,6 +13,8 @@ urlpatterns = [
     path('analyze/<int:listing_id>/', views.run_analysis_view, name='run_analysis'),
     path('result/<int:listing_id>/', views.result_detail_view, name='result_detail'),
     path('analyze-external/', views.analyze_external, name='analyze_external'),
+    path('loading/<str:task_id>/', views.loading_view, name='loading'),
+    path('api/task-status/<str:task_id>/', views.task_status_api, name='task_status_api'),
     path('search_results/', views.search_results, name='search_results'),
 path('reset_password/', auth_views.PasswordResetView.as_view(template_name='core/registration/password_reset_form.html'), name='reset_password'),
 path('reset_password_sent/', auth_views.PasswordResetDoneView.as_view(template_name='core/registration/password_reset_done.html'), name='password_reset_done'),

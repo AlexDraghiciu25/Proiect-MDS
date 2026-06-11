@@ -3,6 +3,7 @@ import requests
 import re
 import math
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from google import genai
 from google.genai import types
 from django.conf import settings
@@ -111,7 +112,7 @@ def verify_distance_claims(listing_lat, listing_lng, claims: list[dict], city: s
         if not destination or "nespecificată" in destination.lower():
             continue
             
-        time.sleep(1.2) 
+        time.sleep(1.0) 
         
         nom_url = "https://nominatim.openstreetmap.org/search"
         
@@ -129,7 +130,7 @@ def verify_distance_claims(listing_lat, listing_lng, claims: list[dict], city: s
             nom_data = nom_response.json()
             
             if not nom_data:
-                time.sleep(1.2)
+                time.sleep(1.0)
                 nom_params['q'] = destination # Fallback extrem
                 nom_response = requests.get(nom_url, params=nom_params, headers=headers, timeout=5)
                 nom_data = nom_response.json()
@@ -354,130 +355,183 @@ class DetectiveAgent:
             print("Eroare: Anunțul nu a fost găsit.")
             return None
         
+        t_start = time.time()
         scor_baza = listing.data_completeness_score or 85
         data_azi = timezone.now().strftime('%d.%m.%Y')
 
-        # Inițializăm MapsAgent
         maps_agent = MapsAgent()
         
-        # 0. Obținem coordonatele apartamentului pentru a le folosi în validări
-        query_location = f"{listing.neighborhood}, {listing.city}"
-        lat, lng = maps_agent.get_coordinates(query_location)
+        # Folosim coordonatele GPS salvate de scraper (instant, fără Nominatim)
+        lat, lng = listing.latitude, listing.longitude
+        if not lat or not lng:
+            query_location = f"{listing.neighborhood}, {listing.city}"
+            lat, lng = maps_agent.get_coordinates(query_location)
         
-        verified_claims_text = "Nu au fost identificate afirmații legate de distanțe în descriere."
+        t_coords = time.time()
+        print(f"[⏱] Coords: {t_coords - t_start:.1f}s")
+
+        # ── FAZA 1: POI fetch (necesar pentru prompt-ul Gemini) ──
         poi_data = "Nu s-au putut obține date despre zonă (coordonate lipsă)."
-
-        # 0. Obținem coordonatele apartamentului pentru a le folosi în validări
-        query_location = f"{listing.neighborhood}, {listing.city}"
-        lat, lng = maps_agent.get_coordinates(query_location)
+        poi_raw_data = {}
         
-        verified_claims_text = "Nu au fost identificate afirmații legate de distanțe în descriere."
-
         if lat and lng:
-            # 1. Extragem promisiunile
-            claims = extract_distance_claims(listing.description)
-            
-            # 2. Verificăm promisiunile (dacă există)
-            verified_claims = []
-            if claims:
-                verified_claims = verify_distance_claims(lat, lng, claims, city=listing.city)
-            
-            # Formatăm rezultatele pentru promptul AI
-            if verified_claims:
-                verified_claims_text = ""
-                for vc in verified_claims:
-                    verified_claims_text += f"► {vc['raw_text']} -> DESTINAȚIE REALĂ: {vc['destination']} | TIMP REAL: {vc['real_minutes']} min | VERDICT: {vc['verdict']}\n"
-            
-            # 3. Obținem datele POI din Overpass folosind lat și lng
-            poi_raw_data = maps_agent.get_pois(lat, lng)
-            poi_data = json.dumps(poi_raw_data, indent=2, ensure_ascii=False)
+            try:
+                poi_raw_data = maps_agent.get_pois(lat, lng)
+                poi_data = json.dumps(poi_raw_data, indent=2, ensure_ascii=False)
+            except Exception as e:
+                print(f"[-] Eroare Overpass POI: {e}")
         else:
-            # FALLBACK INTELIGENT: Dacă Nominatim nu găsește strada, îi cerem lui Gemini să folosească ce știe el despre acel cartier
             poi_data = f"Sistemul GPS a eșuat să găsească adresa exactă. Ignoră complet această eroare tehnică! Te rog să analizezi zona '{listing.neighborhood}, {listing.city}' bazându-te exclusiv pe cunoștințele tale generale. Scrie un paragraf atractiv despre cum este viața în acest cartier (puncte de interes generale, nivel de trai, transport în comun, parcuri cunoscute). Fii util și NU menționa sub nicio formă în raport că îți lipsesc datele sau coordonatele!"
 
-        prompt = f"""
-            Ești un consultant imobiliar senior din România, specializat în analiza de piață. 
-            Analizează acest anunț pornind de la un Index de Încredere de bază de {scor_baza}%.
+        t_poi = time.time()
+        print(f"[⏱] POI fetch: {t_poi - t_coords:.1f}s")
 
-            DATE ANUNȚ:
-            Locație: {listing.city}, {listing.neighborhood}
-            Titlu: {listing.title} 
-            Preț: {listing.price} {listing.currency}
-            Descriere: {listing.description}
-            Specificații tehnice: {listing.raw_data.get('site_specs', 'N/A')}
+        # ── FAZA 2: Gemini + Distance Verification IN PARALEL ──
+        # Gemini primește datele de listing + POI (fără distance verification)
+        # Distance verification rulează simultan pe alt thread
+        # Penalizările pentru distanțe exagerate se aplică PROGRAMATIC după
+
+        prompt = f"""Ești un consultant imobiliar senior din România, specializat în analiza de piață.
+Analizează acest anunț pornind de la un Index de Încredere de bază de {scor_baza}%.
+
+DATE ANUNȚ:
+Locație: {listing.city}, {listing.neighborhood}
+Titlu: {listing.title}
+Preț: {listing.price} {listing.currency}
+Descriere: {listing.description}
+Specificații tehnice: {listing.raw_data.get('site_specs', 'N/A')}
+
+Puncte de interes identificate de Maps Agent în zonă (Rază 1km):
+{poi_data}
+
+INSTRUCȚIUNI:
+1. Scorul final trebuie să reflecte acuratețea și completitudinea datelor.
+2. Dacă scorul final este sub 90%, incluzi în "flags" motivele.
+3. NU scădea puncte pentru lipsa contactului telefonic.
+4. Scade din scorul de {scor_baza}% DOAR dacă identifici contradicții sau preț suspect.
+5. Dacă prețul este cu 10-20% sub medie, etichetează-l ca "Ofertă competitivă".
+6. Data curentă: {data_azi}. Ignoră eroarea "dată în viitor" pentru ziua de azi.
+7. Folosește POI pentru a redacta o recenzie utilă a zonei în "proximity". Incluzi distanțele EXACTE în metri (ex: "Stația de metrou X la 450m, Kaufland la 800m").
+
+Returnează DOAR un JSON valid:
+{{
+    "score": <int_scor_ajustat>,
+    "flags": ["listă_cu_riscuri_sau_lipsuri"],
+    "proximity": "Sinteză a vieții în zonă cu distanțe exacte...",
+    "price_analysis": {{
+        "average_zone_price": <int_valoare_medie_estimată_în_{listing.currency}>,
+        "difference_percentage": <int_procent>,
+        "label": "ex: Preț conform pieței"
+    }},
+    "verdict": "concluzie_echilibrată"
+}}"""
+
+        gemini_result = [None]
+        gemini_error = [None]
+        verified_claims = []
+
+        def _call_gemini():
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    response = self.client.models.generate_content(
+                        model=self.model_id,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            thinking_config=types.ThinkingConfig(thinking_budget=0)
+                        )
+                    )
+                    gemini_result[0] = json.loads(response.text)
+                    return
+                except Exception as e:
+                    eroare_str = str(e)
+                    print(f"[-] Eroare AI (Încercarea {attempt + 1}/{max_retries}): {eroare_str}")
+                    if "503" in eroare_str or "429" in eroare_str or "UNAVAILABLE" in eroare_str:
+                        wait_time = 5 * (attempt + 1)
+                        print(f"[*] Server supraîncărcat. Așteptăm {wait_time}s...")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        gemini_error[0] = eroare_str
+                        return
+            gemini_error[0] = "Eșuat după multiple încercări"
+
+        def _verify_distances():
+            nonlocal verified_claims
+            if not lat or not lng or not listing.description:
+                return
+            claims = extract_distance_claims(listing.description)
+            claims = claims[:3]  # Cap la max 3 claims
+            if claims:
+                verified_claims = verify_distance_claims(lat, lng, claims, listing.city or "București")
+
+        # Lansăm ambele în paralel
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            fut_gemini = executor.submit(_call_gemini)
+            fut_distance = executor.submit(_verify_distances)
             
-            Puncte de interes identificate de Maps Agent în zonă (Rază 1km):
-            {poi_data}
-
-            VERIFICARE AFIRMAȚII PROPRIETAR:
-            {verified_claims_text}
-
-            INSTRUCȚIUNI CRITICE PENTRU SCOR ȘI FLAGS:
-            1. Scorul final trebuie să reflecte acuratețea și completitudinea datelor. 
-            2. Dacă scorul final este sub 90%, ești OBLIGAT să incluzi în lista "flags" motivele.
-            3. NU scădea puncte pentru lipsa contactului telefonic.
-            4. Scade din scorul de {scor_baza}% DOAR dacă identifici contradicții sau preț suspect.
-            5. Dacă prețul este cu 10-20% sub medie, etichetează-l ca "Ofertă competitivă" în verdict.
-            6. Data curentă: {data_azi}. Ignoră eroarea "dată în viitor" pentru ziua de azi.
-            7. Folosește Datele POI pentru a redacta o recenzie utilă a zonei în câmpul "proximity". ESTE OBLIGATORIU să incluzi în text distanțele EXACTE în metri pentru principalele puncte de interes găsite (ex: "Stația de metrou Nicolae Teclu se află la 450m, iar supermarketul Kaufland la 800m"). Nu folosi doar generalități precum "la distanță scurtă"!            8. [IMPORTANT] Dacă în secțiunea VERIFICARE AFIRMAȚII PROPRIETAR există verdicte de "UȘOR EXAGERAT" sau "FALS / ÎNȘELĂTOR", PENALIZEAZĂ SCORUL (scade între 5 și 20 de puncte în funcție de gravitate) și menționează clar în "flags" că agentul/proprietarul a exagerat distanțele.
-            8. [IMPORTANT] Dacă în VERIFICARE AFIRMAȚII PROPRIETAR există verdictul "PIN FALS PE HARTĂ (MOMEALĂ)", înseamnă că agentul a pus intenționat pin-ul pe Storia mai aproape de metrou/POI pentru a trișa căutările. PENALIZEAZĂ SCORUL drastic și scrie clar la "Red Flags" acest comportament înșelător legat de harta falsă.
-            
-            Returnează DOAR un JSON valid:
-            {{
-                "score": <int_scor_ajustat_pornind_de_la_{scor_baza}>,
-                "flags": ["listă_cu_riscuri_SAU_lipsuri_tehnice"],
-                "proximity": "Sinteză complexă a vieții în această zonă bazată pe datele POI...",
-                "price_analysis": {{
-                    "average_zone_price": <int_valoare_medie_estimată_în_{listing.currency}>,
-                    "difference_percentage": <int_procent_pozitiv_sau_negativ>,
-                    "label": "ex: Preț conform pieței / Ofertă excelentă"
-                }},
-                "distance_verification": [
-                    {{
-                        "claim": "textul afirmatiei, ex: 10 minute de metrou",
-                        "real": "valoarea reală calculată, ex: 14 minute",
-                        "verdict": "CONFIRMAT / UȘOR EXAGERAT / FALS / ÎNȘELĂTOR"
-                    }}
-                ],
-                "verdict": "concluzie_echilibrată_care_explică_și_scorul"
-            }}
-            """
-
-        max_retries = 3
-        for attempt in range(max_retries):
+            fut_gemini.result(timeout=60)
             try:
-                response = self.client.models.generate_content(
-                    model=self.model_id,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(response_mime_type="application/json")
-                )
-                
-                data = json.loads(response.text)
-                
-                return Report.objects.create(
-                    listing=listing,
-                    user=user,
-                    integrity_score=data.get('score', 0),
-                    red_flags=data.get('flags', []),
-                    proximity_analysis=data.get('proximity', "Nu au fost identificate detalii despre zonă."),
-                    final_verdict=data.get('verdict', ""),
-                    price_analysis=data.get('price_analysis'),
-                    distance_verification=data.get('distance_verification', [])
-                )
-                
-            except Exception as e:
-                eroare_str = str(e)
-                print(f"[-] Eroare AI (Încercarea {attempt + 1}/{max_retries}): {eroare_str}")
-                
-                # Dacă eroarea este de rețea/suprasolicitare (503 sau 429), așteptăm și reîncercăm
-                if "503" in eroare_str or "429" in eroare_str or "UNAVAILABLE" in eroare_str:
-                    wait_time = 5 * (attempt + 1) # Așteaptă 5s, apoi 10s...
-                    print(f"[*] Server supraîncărcat. Așteptăm {wait_time} secunde înainte de a reîncerca...")
-                    time.sleep(wait_time)
-                    continue # Trece la următoarea iterație din bucla for
-                else:
-                    # Dacă e altă eroare (ex: JSON invalid), ne oprim
-                    break 
+                fut_distance.result(timeout=15)
+            except Exception:
+                pass
 
-        print("[-] Analiza AI a eșuat definitiv după multiple încercări.")
-        return None
+        t_parallel = time.time()
+        print(f"[⏱] Gemini + Distance (paralel): {t_parallel - t_poi:.1f}s")
+
+        if not gemini_result[0]:
+            print(f"[-] Analiza AI a eșuat: {gemini_error[0]}")
+            return None
+
+        data = gemini_result[0]
+
+        # ── FAZA 3: Aplicăm penalizări pentru distanțe exagerate (PROGRAMATIC) ──
+        distance_verification_results = []
+        score_adjustment = 0
+        
+        for vc in verified_claims:
+            verdict = vc.get('verdict', '')
+            entry = {
+                "claim": vc.get('raw_text', 'Distanță afirmată'),
+                "real": f"{vc.get('real_minutes', '?')} minute ({vc.get('transport_mode', 'walking')})",
+                "verdict": verdict
+            }
+            distance_verification_results.append(entry)
+            
+            # Penalizări automate bazate pe verdict
+            if verdict == "UȘOR EXAGERAT":
+                score_adjustment -= 5
+                data.setdefault('flags', []).append(
+                    f"Distanța către {vc['destination']} e ușor exagerată (afirmat: {vc['claimed_minutes']}min, real: {vc['real_minutes']}min)"
+                )
+            elif verdict == "FALS / ÎNȘELĂTOR":
+                score_adjustment -= 15
+                data.setdefault('flags', []).append(
+                    f"⚠️ Distanța către {vc['destination']} e fals înșelătoare! (afirmat: {vc['claimed_minutes']}min, real: {vc['real_minutes']}min)"
+                )
+            elif "PIN FALS" in verdict:
+                score_adjustment -= 25
+                data.setdefault('flags', []).append(
+                    f"🚨 PIN FALS PE HARTĂ: Agentul a plasat pinul GPS mai aproape de {vc['destination']} pentru a trișa căutările!"
+                )
+
+        final_score = max(0, min(100, data.get('score', scor_baza) + score_adjustment))
+
+        t_end = time.time()
+        print(f"[⏱] TOTAL analyze_listing: {t_end - t_start:.1f}s (Gemini+Dist paralel: {t_parallel - t_poi:.1f}s, POI: {t_poi - t_coords:.1f}s)")
+
+        try:
+            return Report.objects.create(
+                listing=listing,
+                user=user,
+                integrity_score=final_score,
+                red_flags=data.get('flags', []),
+                proximity_analysis=data.get('proximity', "Nu au fost identificate detalii despre zonă."),
+                final_verdict=data.get('verdict', ""),
+                price_analysis=data.get('price_analysis'),
+                distance_verification=distance_verification_results
+            )
+        except Exception as e:
+            print(f"[-] Eroare la salvarea raportului: {e}")
+            return None
