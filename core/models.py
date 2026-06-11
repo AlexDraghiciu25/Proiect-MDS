@@ -45,6 +45,10 @@ class Listing(models.Model):
     city = models.CharField(max_length=100, null=True, blank=True)
     neighborhood = models.CharField(max_length=100, null=True, blank=True) 
 
+    # === LOCAȚIE GPS (NOU) ===
+    latitude = models.FloatField(null=True, blank=True, help_text="Latitudine extrasă din sursă")
+    longitude = models.FloatField(null=True, blank=True, help_text="Longitudine extrasă din sursă")
+
     # --- CARACTERISTICI IMOBIL ---
     rooms = models.IntegerField(null=True, blank=True)
     bathrooms = models.IntegerField(null=True, blank=True)
@@ -127,7 +131,8 @@ class Report(models.Model):
     proximity_analysis = models.TextField(blank=True, null=True) 
     final_verdict = models.TextField()
     price_analysis = models.JSONField(null=True, blank=True)
-    
+    distance_verification = models.JSONField(default=list, blank=True, null=True)
+
     # --- Metadate Tehnice AI ---
     ai_model_version = models.CharField(max_length=100, null=True, blank=True, help_text="Ex: gpt-4-turbo-2024-04-09")
     token_usage = models.IntegerField(default=0, help_text="Numărul total de tokeni consumați pentru acest raport")

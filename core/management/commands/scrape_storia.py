@@ -1,6 +1,7 @@
 import os
 import time
 import random
+import json
 from django.core.management.base import BaseCommand
 from core.models import Listing
 from playwright.sync_api import sync_playwright
@@ -134,6 +135,13 @@ class Command(BaseCommand):
                 return 'N/A';
             }""")
 
+            # ========================================================
+            for linie in locatie.split('\n'):
+                if 'Bucuresti' in linie or 'Sector' in linie:
+                    locatie = linie.strip()
+                    break
+            # ========================================================
+
             # --- PASUL 2: DESCHIDEREA ACORDEOANELOR ---
             # Caută butoanele după text și dă click pe ele prin JS clasic
             page.evaluate("""function() {
@@ -210,12 +218,50 @@ class Command(BaseCommand):
                 elif src and 'image;s=' not in src:
                     imagini_brute.append(src)
 
+            # --- NOU: EXTRAGERE COORDONATE GPS DIN JSON-UL STORIA ---
+            lat_extras = None
+            lng_extras = None
+            
+            try:
+                script_locator = page.locator("script#__NEXT_DATA__").first
+                if script_locator.count() > 0:
+                    import json
+                    json_text = script_locator.inner_text()
+                    json_data = json.loads(json_text)
+                    
+                    # Navigăm în structura JSON-ului de la Storia
+                    location_data = json_data.get('props', {}).get('pageProps', {}).get('ad', {}).get('location', {}).get('coordinates', {})
+                    if location_data:
+                        lat_extras = location_data.get('latitude')
+                        lng_extras = location_data.get('longitude')
+            except Exception as e:
+                self.stdout.write(self.style.ERROR(f"   Eroare la extragerea coordonatelor JSON: {e}"))
+            # --------------------------------------------------------
+
+            # ========================================================
+            # BLOCUL DE DEBUGGING: Vizualizăm ce s-a extras
+            # ========================================================
+            self.stdout.write("\n" + "="*60)
+            self.stdout.write(f"🔗 URL: {url}")
+            self.stdout.write(f"📌 TITLU EXTRAS: {titlu}")
+            self.stdout.write(f"💰 PRET EXTRAS: {pret}")
+            
+            # Aici e partea critică pentru locație
+            self.stdout.write(self.style.WARNING(f"📍 LOCAȚIE EXTRASĂ (BRUT): {locatie}"))
+            
+            # Putem printa și începutul descrierii să vedem dacă a luat text util
+            self.stdout.write(f"📝 DESCRIERE (primele 100 char): {descriere[:100]}...")
+            self.stdout.write("="*60 + "\n")
+            # ========================================================
+
             # --- SALVAREA ---
             with transaction.atomic():
                 listing = Listing.objects.create(
                     title=f"BRUT: {titlu[:40]}",
                     source_url=url,
                     source_website="Storia.ro",
+                    latitude=lat_extras,     # <--- SALVĂM LATITUDINEA
+                    longitude=lng_extras,    # <--- SALVĂM LONGITUDINEA
                     processing_status='PENDING',
                     raw_data={
                         "site_title": titlu,
