@@ -2,6 +2,7 @@ import os
 import time
 import random
 import re
+import json
 from django.core.management.base import BaseCommand
 from core.models import Listing
 from playwright.sync_api import sync_playwright
@@ -9,25 +10,35 @@ from playwright_stealth import Stealth
 from django.db import transaction
 
 class Command(BaseCommand):
-    help = 'Scraper robust pentru Storia.ro (Izolare pe Tab-uri, Heuristic Extraction, Lazy Loading, Auto-Populare)'
+    help = 'Scraper robust pentru Storia.ro (Izolare pe Tab-uri, Heuristic Extraction, Lazy Loading, Auto-Populare, Coordonate GPS)'
 
     def handle(self, *args, **options):
-        # Permitem operatiunile asincrone in Django
         os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
         self.stdout.write(self.style.WARNING(" Parser Storia.ro: Inițiere proces de scraping..."))
 
+        url_manual = options.get('url')
+
         with Stealth().use_sync(sync_playwright()) as p:
             browser = p.chromium.launch(
-                headless=True, # Poti pune True cand il muti pe server
-                args=["--disable-blink-features=AutomationControlled"]
+                headless=True,
+                args=["--disable-blink-features=AutomationControlled", "--no-sandbox"]
             ) 
             
             context = browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
                 viewport={"width": 1920, "height": 1080}
             )
-            
-            # Deschidem un tab principal DOAR pentru a extrage lista de link-uri
+
+            if url_manual:
+                self.stdout.write(self.style.WARNING(f" 🎯 [RentGuru Manual Storia] Se procesează doar URL-ul cerut: {url_manual[:50]}..."))
+                self.proceseaza_anunt_storia(context, url_manual)
+                browser.close()
+                self.stdout.write(" Gata scanarea rapidă pentru URL-ul de Storia!")
+                return
+
+            # ====================================================
+            # RULARE ÎN FUNDAL (BATCH SCRAPING AUTOMAT)
+            # ====================================================
             main_page = context.new_page()
             url_cautare = "https://www.storia.ro/ro/rezultate/inchiriere/apartament/bucuresti"
             
@@ -62,18 +73,14 @@ class Command(BaseCommand):
                     self.stdout.write(self.style.ERROR(" Am gasit 0 anunturi."))
                     return
 
-                self.stdout.write(self.style.SUCCESS(f"Am gasit {len(linkuri_valide)} anunturi pe pagina."))
-
-                # Am terminat cu pagina de cautare, o inchidem pentru a elibera memoria
+                self.stdout.write(self.style.SUCCESS(f"Am gasit {len(linkuri_valide)} anunturi pe pagina. Incepem procesarea..."))
                 main_page.close()
 
                 count = 0
                 for url in list(linkuri_valide):
-                    if count >= 40: break # Seteaza numarul dorit de anunturi per rulare
+                    if count >= 40: break 
                     
-                    # ATENTIE: Trimitem 'context', nu 'page', pentru ca functia sa isi creeze propriul tab
-                    self.proceseaza_anunt(context, url)
-                    
+                    self.proceseaza_anunt_storia(context, url)
                     count += 1
                     time.sleep(random.uniform(3, 6))
 
@@ -81,10 +88,9 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.ERROR(f" Eroare in misiune: {e}"))
             finally:
                 browser.close()
-                self.stdout.write(" Gata scriptul de Scraping!")
+                self.stdout.write(" Gata scriptul de Scraping Storia!")
 
-    def proceseaza_anunt(self, context, url):
-        # 1. Verificam daca exista deja
+    def proceseaza_anunt_storia(self, context, url):
         if Listing.objects.filter(source_url=url).exists():
             self.stdout.write(self.style.WARNING(f"Skip: Exista in DB: {url[:40]}..."))
             return
@@ -94,7 +100,6 @@ class Command(BaseCommand):
         try:
             page.goto(url, wait_until="domcontentloaded", timeout=45000)
             
-            # --- VALIDARE TITLU ---
             h1_element = page.locator("h1").first
             if h1_element.count() == 0:
                 self.stdout.write(self.style.WARNING(f"   Skip: Pagină invalidă/ștearsă (fără H1): {url[:40]}..."))
@@ -102,18 +107,16 @@ class Command(BaseCommand):
                 return
 
             titlu = h1_element.inner_text().strip()
-            
             if not titlu or len(titlu) < 5 or titlu.lower() == "fara titlu":
                 self.stdout.write(self.style.WARNING(f"   Skip: Titlu invalid: '{titlu}' la {url[:40]}..."))
                 page.close()
                 return
             
-            # --- PASUL 1: SCROLL LENT ---
             page.evaluate("""
                 var interval = setInterval(function() { window.scrollBy(0, 400); }, 300);
                 setTimeout(function() { clearInterval(interval); }, 2500);
             """)
-            time.sleep(3) # Așteptăm scroll-ul
+            time.sleep(3) 
             
             titlu = page.locator("h1").first.inner_text().strip() if page.locator("h1").count() > 0 else "Fara titlu"
             
@@ -132,7 +135,11 @@ class Command(BaseCommand):
                 return 'N/A';
             }""")
 
-            # --- PASUL 2: DESCHIDEREA ACORDEOANELOR ---
+            for linie in locatie.split('\n'):
+                if 'Bucuresti' in linie or 'Sector' in linie:
+                    locatie = linie.strip()
+                    break
+
             page.evaluate("""function() {
                 var butoane = document.querySelectorAll('button, div[role="button"]');
                 for(var i=0; i<butoane.length; i++) {
@@ -145,7 +152,6 @@ class Command(BaseCommand):
             
             time.sleep(2)
 
-            # --- PASUL 3: CITIREA DATELOR "LA SÂNGE" ---
             specs_brute = page.evaluate("""function() {
                 var container = document.querySelector('[data-testid="ad-details"]') || 
                                 document.querySelector('[data-cy="adPageAdFeatures"]');
@@ -163,24 +169,20 @@ class Command(BaseCommand):
                 if(container) {
                     var linii = container.innerText.split('\\n'); 
                     var texte_valide = [];
-                    
                     for(var i=0; i<linii.length; i++) {
                         var linie = linii[i].trim();
                         if(linie.length > 1 && linie.length < 80) {
                             texte_valide.push(linie);
                         }
                     }
-                    
                     var elemente_unice = [];
                     for(var j=0; j<texte_valide.length; j++) {
                         if(elemente_unice.indexOf(texte_valide[j]) === -1) {
                             elemente_unice.push(texte_valide[j]);
                         }
                     }
-                    
                     return elemente_unice.join(' | ');
                 }
-                
                 return '';
             }""")
 
@@ -199,12 +201,22 @@ class Command(BaseCommand):
                 elif src and 'image;s=' not in src:
                     imagini_brute.append(src)
 
-            # ====================================================
-            # --- ALGORITM DE FILTRARE ȘI AUTO-POPULARE ---
-            # ====================================================
+            lat_extras = None
+            lng_extras = None
+            try:
+                script_locator = page.locator("script#__NEXT_DATA__").first
+                if script_locator.count() > 0:
+                    json_text = script_locator.inner_text()
+                    json_data = json.loads(json_text)
+                    location_data = json_data.get('props', {}).get('pageProps', {}).get('ad', {}).get('location', {}).get('coordinates', {})
+                    if location_data:
+                        lat_extras = location_data.get('latitude')
+                        lng_extras = location_data.get('longitude')
+            except Exception as e:
+                self.stdout.write(self.style.ERROR(f"   Eroare la extragerea coordonatelor JSON: {e}"))
+
             text_total_analiza = f"{titlu} {descriere} {specs_brute}".lower()
 
-            # 1. Număr de camere
             camere_detectate = None
             if "garsonier" in text_total_analiza or "1 camer" in text_total_analiza:
                 camere_detectate = 1
@@ -215,7 +227,6 @@ class Command(BaseCommand):
             elif "4 camer" in text_total_analiza or "patru camer" in text_total_analiza:
                 camere_detectate = 4
 
-            # 2. Etaj și Regim de înălțime (Total Etaje)
             etaj_detectat = None
             if "etaj p" in text_total_analiza or "parter" in text_total_analiza or "etaj parter" in text_total_analiza:
                 etaj_detectat = "P"
@@ -230,13 +241,11 @@ class Command(BaseCommand):
                 try: total_etaje_detectat = int(match_total_etaje.group(1))
                 except: pass
             else:
-                # Căutăm structuri de genul "bloc cu 4 etaje" sau "imobil p+4"
                 match_regim = re.search(r'(?:regim\s*de\s*inaltime\s*|bloc\s*cu\s*|imobil\s*)(?:p\+)?(\d+)\s*etaj', text_total_analiza)
                 if match_regim:
                     try: total_etaje_detectat = int(match_regim.group(1))
                     except: pass
 
-            # 3. Suprafața Utilă
             suprafata_detectata = None
             match_suprafata = re.search(r'(\d+(?:[.,]\d+)?)\s*(?:mp|m\s*patrati|metri\s*patrati|suprafata\s*utila)', text_total_analiza)
             if match_suprafata:
@@ -245,7 +254,6 @@ class Command(BaseCommand):
                     suprafata_detectata = float(val_suprafata)
                 except: pass
 
-            # 4. Opțiuni predefinite conforme cu CHOICES din model
             compartimentare = None
             if "semidecomandat" in text_total_analiza: compartimentare = "semidecomandat"
             elif "decomandat" in text_total_analiza: compartimentare = "decomandat"
@@ -267,13 +275,11 @@ class Command(BaseCommand):
             elif "confort 1" in text_total_analiza or "conf 1" in text_total_analiza: comfort = "1"
             elif "confort 2" in text_total_analiza or "conf 2" in text_total_analiza: comfort = "2"
 
-            # 5. Funcție ajutătoare pentru maparea stărilor booleene (True/None)
             def detecteaza_dotare(cuvinte_cheie):
                 if any(cuvant in text_total_analiza for cuvant in cuvinte_cheie):
                     return True
                 return None
 
-            # --- CURĂȚARE PREȚ INAINTE DE SALVARE ---
             pret_curat = None
             if pret and pret != "N/A":
                 cifre_pret = ''.join(c for c in pret if c.isdigit() or c == '.' or c == ',')
@@ -284,20 +290,28 @@ class Command(BaseCommand):
                 try: pret_curat = float(cifre_pret)
                 except ValueError: pret_curat = None
 
-            # --- SALVAREA CURATĂ ȘI POPULATĂ ÎN MODEL ---
+            self.stdout.write("\n" + "="*60)
+            self.stdout.write(f"🔗 URL: {url}")
+            self.stdout.write(f"📌 TITLU: {titlu}")
+            self.stdout.write(f"💰 PRET DETECTAT: {pret_curat} EUR/RON")
+            self.stdout.write(f"🌍 GPS COORDONATE: Lat {lat_extras} | Lng {lng_extras}")
+            self.stdout.write(self.style.WARNING(f"📍 CARTIER: {locatie}"))
+            self.stdout.write("="*60 + "\n")
+
             with transaction.atomic():
-                listing = Listing.objects.create(
+                Listing.objects.create(
                     title=titlu[:255] if titlu and titlu != "Fara titlu" else "Anunț Storia",
                     description=descriere if descriere != "N/A" else "",
                     price=pret_curat,
-                    currency="EUR" if "eur" in pret.lower() else "RON",
+                    currency="EUR" if "eur" in pret.lower() or (pret_curat and pret_curat < 1500) else "RON",
                     city="Bucuresti",
                     neighborhood=locatie.replace("Bucuresti,", "").strip() if locatie != "N/A" else "",
                     source_url=url,
                     source_website="Storia.ro",
+                    latitude=lat_extras,     
+                    longitude=lng_extras,    
                     processing_status='PROCESSED',
                     
-                    # --- DATE GENERALE ȘI CARACTERISTICI ---
                     rooms=camere_detectate,
                     floor=etaj_detectat,
                     total_floors=total_etaje_detectat,
@@ -307,16 +321,14 @@ class Command(BaseCommand):
                     furnishing_state=stare_mobilier,
                     heating_type=tip_incalzire,
 
-                    # --- ELECTROCASNICE DETECTATE ---
                     has_fridge=detecteaza_dotare(["frigider", "combina frigorifica", "utilata", "utilat"]),
                     has_washing_machine=detecteaza_dotare(["masina de spalat", "masina spalat rufe", "utilata"]),
-                    has_dishwasher=detecteaza_dotare(["masina de spalat vase", "masina spalat vase", "dishwasher"]),
+                    has_dishwasher=detecteaza_dotare(["masina de spalat vase", "dishwasher"]),
                     has_tv=detecteaza_dotare(["televizor", "tv", "smart tv"]),
                     has_ac=detecteaza_dotare(["aer conditionat", "ac", "climatizare", "vortice"]),
                     has_oven=detecteaza_dotare(["cuptor", "aragaz", "plita"]),
                     has_microwave=detecteaza_dotare(["microunde", "cuptor microunde"]),
 
-                    # --- FACILITĂȚI IMOBIL & EXTERIOR ---
                     has_elevator=detecteaza_dotare(["lift", "elevator"]),
                     has_intercom=detecteaza_dotare(["interfon", "videointerfon"]),
                     has_parking=detecteaza_dotare(["parcare", "loc parcare", "garaj", "loc de parcare"]),
@@ -334,11 +346,9 @@ class Command(BaseCommand):
                     }
                 )
             
-            self.stdout.write(self.style.SUCCESS(f"   Aspirat și populat local: {titlu[:30]}..."))
-            return listing
+            self.stdout.write(self.style.SUCCESS(f"   Aspirat și populat local cu succes de pe Storia: {titlu[:30]}..."))
 
         except Exception as e:
             self.stdout.write(self.style.ERROR(f"   Eroare pe pagina anuntului: {e}"))
-        
         finally:
             page.close()

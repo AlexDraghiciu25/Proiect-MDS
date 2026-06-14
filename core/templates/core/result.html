@@ -124,6 +124,35 @@
                         <p style="line-height: 1.7;">{{ report.final_verdict }}</p>
                     </div>
 
+                    {% if report.distance_verification %}
+                    <div class="ai-card mb-4" style="border-top-color: #3b82f6;">
+                        <h3 class="ai-card-title"><i class="bi bi-signpost-split text-primary me-2"></i>Verificare Afirmații Distanță</h3>
+                        <div class="table-responsive mt-3">
+                            <table class="table table-bordered align-middle mb-0" style="font-size: 0.95rem;">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="text-secondary">Afirmație Proprietar</th>
+                                        <th class="text-secondary">Distanță Reală pe Hartă</th>
+                                        <th class="text-secondary">Verdict AI</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for verificare in report.distance_verification %}
+                                    <tr>
+                                        <td class="text-muted fst-italic">"{{ verificare.claim }}"</td>
+                                        <td class="fw-medium text-dark">{{ verificare.real }}</td>
+                                        <td class="fw-bold {% if 'CONFIRMAT' in verificare.verdict %}text-success{% elif 'EXAGERAT' in verificare.verdict %}text-warning{% else %}text-danger{% endif %}">
+                                            {% if 'CONFIRMAT' in verificare.verdict %}<i class="bi bi-check-circle-fill me-1"></i>{% elif 'EXAGERAT' in verificare.verdict %}<i class="bi bi-exclamation-triangle-fill me-1"></i>{% else %}<i class="bi bi-x-circle-fill me-1"></i>{% endif %}
+                                            {{ verificare.verdict }}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
+
                     <div class="row g-4">
                         <div class="col-md-6">
                             <div class="ai-card bg-light border-0 shadow-none h-100">

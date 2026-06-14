@@ -15,9 +15,16 @@ import json
 from django.views.decorators.csrf import csrf_exempt
 import re
 from google import genai
-from .services import DetectiveAgent
 from django.conf import settings
 import requests
+
+# Importăm ambele comenzi de scraping pentru a le putea rula instant la cerere manuală
+from core.management.commands.scrape_olx import Command as OlxScraper
+# Ajustează calea de mai jos dacă fișierul tău de Storia are altă denumire sau locație
+try:
+    from core.management.commands.scrape_storia import Command as StoriaScraper
+except ImportError:
+    StoriaScraper = None
 
 # ==========================================
 # 1. AUTENTIFICARE
@@ -65,8 +72,6 @@ def about(request):
 def contact(request):
     return render(request, 'core/contact.html')
 
-# core/views.py
-
 def history(request):
     if not request.user.is_authenticated:
         return redirect('login')
@@ -82,13 +87,11 @@ def history(request):
     })
 
 # ==========================================
-# 3. LOGICA DE CĂUTARE AVANSATĂ CU AI (Cea optimizată)
+# 3. LOGICA DE CĂUTARE AVANSATĂ CU AI
 # ==========================================
 def search_results(request):
-    # 1. Inițializăm query-ul de bază cu prefetch_related pentru a evita interogări multiple în baza de date
     rezultate = Listing.objects.all().prefetch_related('reports')
 
-    # 2. FILTRU TEXT (Căutare universală: Zonă, Oraș, Titlu)
     query = request.GET.get('q', '').strip()
     if query:
         rezultate = rezultate.filter(
@@ -98,7 +101,6 @@ def search_results(request):
             Q(description__icontains=query)
         )
 
-    # 3. FILTRE NUMERICE (Preț, Camere, Suprafață)
     pret_min = request.GET.get('pret_min')
     pret_max = request.GET.get('pret_max')
     if pret_min:
@@ -118,7 +120,6 @@ def search_results(request):
     if partitionare and partitionare != "Toate":
         rezultate = rezultate.filter(partitioning=partitionare)
 
-    # 5. FILTRE FACILITĂȚI (Boolean - se activează dacă checkbox-ul e bifat)
     if request.GET.get('pet_friendly') == 'on':
         rezultate = rezultate.filter(is_pet_friendly=True)
     if request.GET.get('parcare') == 'on':
@@ -130,59 +131,44 @@ def search_results(request):
     if request.GET.get('centrala') == 'on':
         rezultate = rezultate.filter(heating_type__icontains='central')
 
-    # 6. ANALIZA DATELOR (Statistici rapide pentru rezultatele afișate)
-    # Calculăm media de preț a anunțurilor filtrate pentru a ajuta utilizatorul
     statistici = rezultate.aggregate(
         pret_mediu=Avg('price'),
         suprafata_medie=Avg('useful_surface')
     )
     
-    # Adăugăm și prețul per metru pătrat mediu dacă există date
     pret_per_mp = 0
     if statistici['pret_mediu'] and statistici['suprafata_medie']:
         pret_per_mp = statistici['pret_mediu'] / statistici['suprafata_medie']
 
-    # 7. ORDONARE (Cele mai noi la început)
     rezultate = rezultate.order_by('-id')
-
-    # 1. Preluăm opțiunea selectată din filtre (implicit 'Toate' - adică așa cum au fost publicate)
     moneda_selectata = request.GET.get('moneda', 'Toate').strip()
-    
-    # Rata de schimb stabilă pentru simulare
     CURS_EUR_RON = 5.0
 
-    # 2. PROCESARE ȘI CONVERSIE DINAMICĂ (Arhitectură de date curată)
     for anunt in rezultate:
-        # Determină valuta reală (Corecție euristică pentru erorile de scraper)
         moneda_reala = str(anunt.currency).upper()
         pret_brut = float(anunt.price) if anunt.price else 0.0
         
-        # Dacă prețul e mic (sub 1500) dar scraperul a pus RON, e clar o eroare; e de fapt EUR
         if "EUR" in moneda_reala or "€" in moneda_reala or pret_brut < 1500:
             valuta_originala = "EUR"
         else:
             valuta_originala = "RON"
 
-        # Aplicăm conversia în funcție de butonul selectat de utilizator
         if moneda_selectata == "EUR":
             if valuta_originala == "RON":
-                anunt.pret_afisat = pret_brut / CURS_EUR_RON  # Convertim RON -> EUR
+                anunt.pret_afisat = pret_brut / CURS_EUR_RON
             else:
                 anunt.pret_afisat = pret_brut
             anunt.moneda_afisata = "€"
-
         elif moneda_selectata == "RON":
             if valuta_originala == "EUR":
-                anunt.pret_afisat = pret_brut * CURS_EUR_RON  # Convertim EUR -> RON
+                anunt.pret_afisat = pret_brut * CURS_EUR_RON
             else:
                 anunt.pret_afisat = pret_brut
             anunt.moneda_afisata = "RON"
-
-        else:  # Opțiunea "Toate" (Așa cum au fost publicate original)
+        else:
             anunt.pret_afisat = pret_brut
             anunt.moneda_afisata = "€" if valuta_originala == "EUR" else "RON"
 
-    # 8. CONTEXT PENTRU TEMPLATE
     context = {
         'anunturi': rezultate,
         'nr_rezultate': rezultate.count(),
@@ -194,102 +180,131 @@ def search_results(request):
         },
         'filtru_camere': camere,
         'filtru_pret_max': pret_max,
-        'filtru_moneda': moneda_selectata,  # Returnăm starea butonului
+        'filtru_moneda': moneda_selectata,
     }
-
     return render(request, 'core/search_results.html', context)
 
 # ==========================================
 # 4. PAGINA DE DETALII ȘI ANALIZĂ AI
 # ==========================================
-
 def result_detail_view(request, listing_id):
-    # Folosim 'listing' peste tot pentru a se potrivi cu restul codului
     listing = get_object_or_404(Listing, id=listing_id)
-    
-    # Căutăm raportul
     report = Report.objects.filter(listing=listing).first()
-    
-    # DEBUG (opțional): Dacă vrei să vezi în terminal dacă găsește raportul
-    if report:
-        print(f"DEBUG: Scorul găsit este {report.integrity_score}")
-    else:
-        print("DEBUG: Nu există raport pentru acest listing!")
-
     return render(request, 'core/result.html', {
-        'listing': listing,  # Schimbat din 'anunt' în 'listing'
+        'listing': listing,
         'report': report
     })
+
 @login_required
 def run_analysis_view(request, listing_id):
-    if not request.user.is_authenticated:
-        # Returnezi o eroare sau un mesaj că trebuie să fie logat
-        return JsonResponse({'error': 'Trebuie să fii logat pentru analiză.'}, status=401)
-    
     listing = get_object_or_404(Listing, id=listing_id)
-    
-    # Dacă există raport, redirecționăm la detalii
     existing_report = Report.objects.filter(listing=listing).first()
+    
     if existing_report:
         return redirect('result_detail', listing_id=listing.id)
 
-    # Dacă nu, rulăm AI-ul lui Alex
     agent = DetectiveAgent()
     report = agent.analyze_listing(listing_id, request.user)
     
     if report:
-        # Redirecționăm către pagina de detalii unde va apărea noul raport
         return redirect('result_detail', listing_id=listing.id)
     else:
         messages.error(request, "Analiza AI a eșuat. Verifică cheia API.")
         return redirect('home')
 
-# core/views.py
-
-@login_required # <--- Acest decorator forțează logarea obligatorie
+# ==========================================
+# 5. [UNIFICAT] ANALIZĂ DIRECTĂ PRIN URL MANUAL (DASHBOARD)
+# ==========================================
+@login_required
 def analyze_external(request):
     if request.method == 'POST':
         url_extern = request.POST.get('external_url', '').strip()
+        url_lower = url_extern.lower()
         
         # 1. Căutăm dacă anunțul există deja în baza de date
         listing = Listing.objects.filter(source_url=url_extern).first()
         
-        # 2. Dacă NU există, facem SCRAPE + NORMALIZARE
+        # 2. Dacă NU există, executăm comanda de Django direct din cod
         if not listing:
-            messages.info(request, "Anunț nou detectat. Pornim scanarea...")
-            listing = scrape_single_url(url_extern)
-            
-            if not listing:
-                messages.error(request, "Scraper-ul nu a putut accesa link-ul.")
+            messages.info(request, "Anunț nou detectat. Pornim scanarea instatanee...")
+            try:
+                if "olx.ro" in url_lower:
+                    print("-> [RentGuru Engine] Rulăm comanda nativă de scraping pentru OLX...")
+                    scraper_olx = OlxScraper()
+                    # Dacă în handle ai logica directă, o apelăm direct cu URL ca parametru custom
+                    # Dacă scraperul tău vechi folosea o metodă internă, o poți lăsa pe aceea, 
+                    # dar handle() apelat direct e cel mai sigur:
+                    try:
+                        scraper_olx.proceseaza_anunt_olx(None, url_extern)
+                    except AttributeError:
+                        # Fallback dacă logica e direct în handle
+                        scraper_olx.handle(url=url_extern)
+                    
+                elif "storia.ro" in url_lower:
+                    if StoriaScraper:
+                        print("-> [RentGuru Engine] Rulăm comanda nativă de scraping pentru Storia...")
+                        scraper_storia = StoriaScraper()
+                        
+                        # Încercăm să apelăm handle direct sau metode alternative flexibile
+                        # pentru a nu mai crăpa indiferent de cum ai numit funcția în interior
+                        try:
+                            if hasattr(scraper_storia, 'proceseaza_anunt_storia'):
+                                scraper_storia.proceseaza_anunt_storia(None, url_extern)
+                            elif hasattr(scraper_storia, 'proceseaza_anunt_olx'):
+                                # Uneori rămâne denumirea de la OLX din cauza copy-paste-ului
+                                scraper_storia.proceseaza_anunt_olx(None, url_extern)
+                            else:
+                                # Dacă e scrisă direct în handle sau altă metodă generică
+                                scraper_storia.handle(url=url_extern)
+                        except Exception as e_inner:
+                            print(f"-> Încercare fallback direct prin handle: {e_inner}")
+                            # Execuție directă prin handle ca fail-safe suprem
+                            scraper_storia.handle(url=url_extern)
+                    else:
+                        messages.error(request, "Modulul de scraping pentru Storia nu este configurat.")
+                        return redirect('home')
+                else:
+                    messages.error(request, "RentGuru acceptă doar link-uri valide de pe OLX.ro sau Storia.ro.")
+                    return redirect('home')
+
+                # Re-extragem din DB anunțul proaspăt descărcat de scraper
+                listing = Listing.objects.filter(source_url=url_extern).first()
+
+            except Exception as e_scrape:
+                print(f"❌ [Scrape Error] Eșec la descărcarea instantă: {e_scrape}")
+                messages.error(request, "Nu s-a putut descărca anunțul. Asigură-te că link-ul este activ.")
                 return redirect('home')
 
-        # 3. Verificăm dacă are deja un raport AI generat
+        if not listing:
+            messages.error(request, "Scraper-ul nu a putut salva datele anunțului în baza de date.")
+            return redirect('home')
+
+        # 3. FLUXUL HIBRID UNIC: Rulăm imediat și AI-ul în aceeași încărcare!
         report = Report.objects.filter(listing=listing).first()
         
-        # 4. Dacă nu are raport, rulăm procesarea AI securizată cu userul logat
         if not report:
-            # Reîncărcăm obiectul din DB pentru a avea datele proaspăt normalizate
             listing.refresh_from_db()
-            
             messages.info(request, "Generăm raportul AI...")
             try:
                 agent = DetectiveAgent()
-                # Pasăm cu încredere request.user pentru că garantat avem un utilizator autentificat
                 report = agent.analyze_listing(listing.id, request.user)
                 
                 if not report:
-                    messages.error(request, "AI-ul a extras datele dar nu a putut genera concluzia.")
+                    messages.error(request, "AI-ul a extras datele brute dar nu a putut compila raportul.")
                     return redirect('home')
-            except Exception as e:
-                # Afișăm eroarea în terminalul Docker pentru depanare rapidă
-                print(f"------------ EROARE CRITICĂ AI ------------\n{e}\n-----------------------------------------")
-                messages.error(request, f"Eroare la procesarea AI: {e}")
+            except Exception as e_ai:
+                print(f"❌ [Gemini Error] Analiza directă a eșuat:\n{e_ai}")
+                messages.error(request, f"Eroare la procesarea AI instantanee: {e_ai}")
                 return redirect('home')
 
+        # Redirecționăm direct către raport dintr-o singură mișcare!
         return redirect('result_detail', listing_id=listing.id)
         
     return redirect('home')
 
+# ==========================================
+# 6. UNIVERSAL AI CHAT ASSISTANT
+# ==========================================
 def ai_chat_endpoint(request):
     if request.method != "POST":
         return JsonResponse({"reply": "Metodă nepermisă"}, status=405)
@@ -302,7 +317,6 @@ def ai_chat_endpoint(request):
         if not user_message:
             return JsonResponse({"reply": "⚠️ Te rog să introduci un mesaj sau o întrebare pentru RentGuru AI."})
 
-        # Verificăm dacă avem anunțuri selectate pentru a determina modul de lucru
         are_anunturi = len(id_uri_anunturi) >= 1
         tabel_html = ""
         context_proprietati_text = ""
@@ -338,7 +352,6 @@ def ai_chat_endpoint(request):
                     "detalii_profunde": context_analiza_ta
                 })
 
-            # Generăm Matricea Tehnică HTML doar dacă utilizatorul vrea o comparație/analiză pe anunțuri
             tabel_html = """
             <div class="table-responsive mt-2">
                 <table class="table table-sm table-bordered bg-white text-center align-middle" style="font-size: 0.8rem; border-radius: 6px; overflow: hidden;">
@@ -369,7 +382,6 @@ def ai_chat_endpoint(request):
                 context_proprietati_text += f"Titlu: {ctx['anunt'].title}\n"
                 context_proprietati_text += f"DATE AUDIT:\n{ctx['detalii_profunde']}\n"
 
-        # Constructia dinamică a promptului în funcție de context (Hibrid)
         if are_anunturi:
             prompt_llm = f"""
             Ești RentGuru AI, un expert imobiliar din București de elită.
@@ -393,7 +405,6 @@ def ai_chat_endpoint(request):
             3. Formatează răspunsul exclusiv în HTML curat (folosește <strong>, <br>, <ul>, <li>). Fără markdown standard. Păstrează un ton prietenos dar avizat.
             """
 
-        # Apel API prin noul client stabil
         try:
             api_key = getattr(settings, "GEMINI_API_KEY", "CHEIA_TA_AICI")
             client = genai.Client(api_key=api_key)
@@ -407,7 +418,6 @@ def ai_chat_endpoint(request):
             print(f"Eroare GenAI API: {e_api}")
             opinie_ai = f"🤖 Asistentul RentGuru întâmpină probleme tehnice. Detalii: {str(e_api)[:100]}"
 
-        # împachetarea răspunsului final
         if are_anunturi:
             reply_final = (
                 f"📊 <strong>Analiză Personalizată RentGuru AI pentru proprietățile selectate:</strong><br>"

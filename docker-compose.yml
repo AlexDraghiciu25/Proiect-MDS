@@ -3,6 +3,8 @@ services:
     build: .
     container_name: rentguru_web
     command: /app/entrypoint.sh
+    env_file:
+      - .env          # ← adaugă asta
     volumes:
       - .:/app
       - static_volume:/app/staticfiles

@@ -287,7 +287,7 @@
                                             <i class="bi bi-magic me-1"></i> Vezi Analiza Completă
                                         </a>
                                     {% else %}
-                                        <a href="{% url 'run_analysis' anunt.id %}" class="btn-view-report text-center w-100 m-0" style="background: #8b5e3c; color: white;">
+                                        <a href="{% url 'run_analysis' anunt.id %}" class="btn-view-report btn-trigger-analysis text-center w-100 m-0" style="background: #8b5e3c; color: white;">
                                             <i class="bi bi-cpu me-1"></i> Analizează cu AI
                                         </a>
                                     {% endif %}
@@ -396,7 +396,66 @@
         csrfToken: "{{ csrf_token }}"
     };
 </script>
+<script>
+    // Ascultăm evenimentul de afișare a paginii (inclusiv la apăsarea butonului Înapoi / Back)
+    window.addEventListener('pageshow', function (event) {
+        console.log("Pagina a fost afișată. Resetăm starea butoanelor de analiză...");
 
+        // 1. Căutăm toate butoanele care rulează analiza AI
+        // Adaptat după clasa ta reală: class="btn-view-report ... "
+        const butoaneAnaliza = document.querySelectorAll('.btn-view-report');
+
+        butoaneAnaliza.forEach(buton => {
+            // Readucem textul original și iconița dacă au fost modificate în timpul încărcării
+            if (buton.innerHTML.includes('se încarcă') || buton.innerHTML.includes('Analizează')) {
+                // Dacă butonul este cel maro (fără raport generat încă)
+                if (buton.style.background === 'rgb(139, 94, 60)' || buton.getAttribute('style')?.includes('#8b5e3c')) {
+                    buton.innerHTML = '<i class="bi bi-cpu me-1"></i> Analizează cu AI';
+                } else {
+                    // Dacă era butonul verde de raport deja existent
+                    buton.innerHTML = '<i class="bi bi-magic me-1"></i> Vezi Analiza Completă';
+                }
+            }
+            
+            // Eliminăm proprietatea de disable ca să poată da click din nou
+            buton.classList.remove('disabled');
+            buton.style.pointerEvents = 'auto';
+            buton.style.opacity = '1';
+        });
+
+        // 2. Dacă ai adăugat o rotiță globală sau un overlay/spinner pe tot ecranul, ascunde-l și pe acela:
+        const globalSpinner = document.getElementById('global-loading-spinner'); // Schimbă cu ID-ul tău dacă ai așa ceva
+        if (globalSpinner) {
+            globalSpinner.style.display = 'none';
+        }
+
+        // 3. Oprim eventualele animații de tip pulse de pe carduri
+        const elementsWithPulse = document.querySelectorAll('.animate-pulse');
+        elementsWithPulse.forEach(el => {
+            el.classList.remove('animate-pulse');
+        });
+    });
+</script>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // Când se dă click pe butonul de analiză, îl transformăm pe loc în loading state
+        document.querySelectorAll('.btn-trigger-analysis').forEach(function(buton) {
+            buton.addEventListener('click', function(e) {
+                // Prevenim click-urile multiple accidentale
+                if (this.classList.contains('disabled')) {
+                    e.preventDefault();
+                    return;
+                }
+                
+                // Injectăm rotița spinner din Bootstrap și schimbăm textul
+                this.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Analiza se încarcă...`;
+                this.classList.add('disabled');
+                this.style.pointerEvents = 'none';
+                this.style.opacity = '0.85';
+            });
+        });
+    });
+</script>
 <!-- Încărcăm fișierul JS separat din folderul tău de statice -->
 <script src="{% static 'js/compare_agent.js' %}"></script>
 </body>
