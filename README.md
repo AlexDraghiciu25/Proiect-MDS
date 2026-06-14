@@ -31,7 +31,7 @@ Sistemul este structurat pe patru straturi logice:
 ### 🔹 Sprint 1: Setup & Core
 - [✓] Configurare proiect Django și conectare la instanța PostgreSQL.
 - [✓] Definirea Modelelor (User, Report, Listing).
-- [ ] Implementare sistem de autentificare (Login/Register).
+- [✓] Implementare sistem de autentificare (Login/Register).
 
 ### 🔹 Sprint 2: Data & Scraper
 - [✓] Implementare Parser pentru platformele imobiliare (OLX/Storia.ro).
@@ -40,7 +40,7 @@ Sistemul este structurat pe patru straturi logice:
 
 ### 🔹 Sprint 3: AI Agents Integration
 - [✓] **Detective Agent:** Integrare LLM pentru analiza semantică a descrierilor.
-- [ ] **Oracle Agent:** Integrare API Hărți pentru calcularea punctelor de interes.
+- [✓] **Oracle Agent:** Integrare API Hărți pentru calcularea punctelor de interes.
 
 ### 🔹 Sprint 4: Finalization & Testing
 - [✓] Generarea raportului de încredere (Onestitate + Lifestyle).
