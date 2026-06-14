@@ -3,11 +3,7 @@ from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
-# ==========================================
-# 1. MODELUL LISTING (Anunțul Imobiliar)
-# ==========================================
 class Listing(models.Model):
-    # --- ENUMS (Liste de opțiuni predefinite) ---
     STATUS_CHOICES = [('PENDING', 'Așteaptă curățare'), ('PROCESSED', 'Curățat'), ('ERROR', 'Eroare')]
     PARTITIONING_CHOICES = [('decomandat', 'Decomandat'), ('semidecomandat', 'Semidecomandat'), ('nedecomandat', 'Nedecomandat'), ('circular', 'Circular')]
     HEATING_CHOICES = [('centrala_proprie', 'Centrală proprie'), ('centrala_imobil', 'Centrală imobil/bloc'), ('termoficare', 'Termoficare (Radet)'), ('incalzire_electrica', 'Încălzire electrică'), ('calorifere', 'Calorifere')]
@@ -17,22 +13,18 @@ class Listing(models.Model):
     STRUCTURE_CHOICES = [('beton', 'Beton'), ('caramida', 'Cărămidă'), ('bca', 'BCA'), ('lemn', 'Lemn')]
     ENERGY_CLASS_CHOICES = [('A', 'Clasa A'), ('B', 'Clasa B'), ('C', 'Clasa C'), ('D', 'Clasa D'), ('E', 'Clasa E'), ('F', 'Clasa F'), ('G', 'Clasa G')]
 
-    # --- DEFINIREA STĂRILOR PENTRU BOOLEENE ---
     STARI_DOTARI = (
         (True, 'Da'),
         (False, 'Nu'),
         (None, 'Nemenționat (NULL)'),
     )
 
-    # --- IDENTIFICATORI ---
     source_url = models.URLField(max_length=500, unique=True)
     source_website = models.CharField(max_length=50, default='Necunoscut')
 
-    # --- ZONA TAMPON (JSON Data Lake) ---
     raw_data = models.JSONField(default=dict, blank=True, null=True)
     processing_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
 
-    # --- DATE GENERALE ---
     title = models.CharField(max_length=255, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
@@ -148,7 +140,6 @@ class Report(models.Model):
             user = instance.user
             max_reports = 60
             
-            # Importăm modelul aici, în interiorul funcției, pentru a evita "circular import"
             from .models import Report 
             
             old_reports_ids = Report.objects.filter(user=user) \

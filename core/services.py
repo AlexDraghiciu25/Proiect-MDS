@@ -80,9 +80,7 @@ def get_real_travel_time(origin_lat, origin_lng, dest_lat, dest_lng, mode="walki
         mode = "walking"
         
     endpoint = endpoints[mode]
-    
     url = f"https://routing.openstreetmap.de/{endpoint}/{origin_lng},{origin_lat};{dest_lng},{dest_lat}?overview=false"
-    
     headers = {'User-Agent': 'RentGuru/1.0'}
     
     try:
@@ -112,10 +110,8 @@ def verify_distance_claims(listing_lat, listing_lng, claims: list[dict], city: s
             continue
             
         time.sleep(1.2) 
-        
         nom_url = "https://nominatim.openstreetmap.org/search"
         
-        # --- MODIFICARE: Cerem top 5 și folosim Viewbox pentru a prioritiza zona apartamentului ---
         nom_params = {
             'q': f"{destination}, {city}",
             'format': 'json',
@@ -130,7 +126,7 @@ def verify_distance_claims(listing_lat, listing_lng, claims: list[dict], city: s
             
             if not nom_data:
                 time.sleep(1.2)
-                nom_params['q'] = destination # Fallback extrem
+                nom_params['q'] = destination
                 nom_response = requests.get(nom_url, params=nom_params, headers=headers, timeout=5)
                 nom_data = nom_response.json()
                 
@@ -138,15 +134,12 @@ def verify_distance_claims(listing_lat, listing_lng, claims: list[dict], city: s
                 print(f"[-] Harta nu a putut geocoda: '{destination}'")
                 continue
                 
-            # --- NOU: Calculăm distanța matematică pentru a găsi cel mai apropiat rezultat ---
             closest_dest = None
             min_dist = float('inf')
 
             for place in nom_data:
                 p_lat = float(place['lat'])
                 p_lon = float(place['lon'])
-                
-                # Distanță în linie dreaptă pentru triere rapidă
                 dist = (p_lat - listing_lat)**2 + (p_lon - listing_lng)**2
                 if dist < min_dist:
                     min_dist = dist
@@ -156,9 +149,6 @@ def verify_distance_claims(listing_lat, listing_lng, claims: list[dict], city: s
                 continue
 
             dest_lat, dest_lng = closest_dest
-            # --------------------------------------------------------------------------------
-
-            # Rutăm doar către cel mai apropiat punct
             real_data = get_real_travel_time(listing_lat, listing_lng, dest_lat, dest_lng, mode)
             
             if not real_data or isinstance(real_data, str):
@@ -166,11 +156,9 @@ def verify_distance_claims(listing_lat, listing_lng, claims: list[dict], city: s
                 continue
                 
             real_minutes = real_data["duration_minutes"]
-
             safe_claimed = claimed_time if claimed_time > 0 else 1 
             
             if real_minutes <= safe_claimed:
-                # NOU: Dacă e o diferență suspect de mare (mai mult de 4 minute), înseamnă că pin-ul GPS pus de agent e FALS (momeală)
                 if safe_claimed - real_minutes > 4:
                     diff_percent = round(((safe_claimed - real_minutes) / safe_claimed) * 100, 1)
                     verdict = "PIN FALS PE HARTĂ (MOMEALĂ)"
@@ -178,9 +166,7 @@ def verify_distance_claims(listing_lat, listing_lng, claims: list[dict], city: s
                     diff_percent = 0.0
                     verdict = "CONFIRMAT"
             else:
-                # Logica veche: dacă distanța reală e mai MARE decât ce a zis el (adică a mințit ca să pară mai aproape)
                 diff_percent = round(((real_minutes - safe_claimed) / safe_claimed) * 100, 1)
-                
                 if diff_percent < 20:
                     verdict = "CONFIRMAT"
                 elif 20 <= diff_percent <= 50:
@@ -223,10 +209,44 @@ class MapsAgent:
         except Exception as e:
             print(f"MapsAgent [Geocoding Error]: {e}")
         return None, None
+    
+    def get_neighborhood_from_gps(self, lat, lng):
+        """
+        Reverse Geocoding: Trimite coordonatele GPS către Nominatim și extrage 
+        numele oficial al cartierului (suburb / neighbourhood) pentru ORICE oraș.
+        """
+        if not lat or not lng:
+            return "Zonă Nespecificată"
+
+        url = "https://nominatim.openstreetmap.org/reverse"
+        params = {
+            'lat': lat,
+            'lon': lng,
+            'format': 'json',
+            'addressdetails': 1
+        }
+        headers = {'User-Agent': 'RentGuru/1.0'}
+
+        try:
+            time.sleep(1.0)
+            response = requests.get(url, params=params, headers=headers, timeout=5)
+            data = response.json()
+            
+            address = data.get("address", {})
+            cartier = address.get("suburb") or address.get("neighbourhood") or address.get("residential") or address.get("quarter")
+            
+            if cartier:
+                return cartier.strip()
+            if address.get("road"):
+                return f"Zona {address.get('road')}"
+                
+        except Exception as e:
+            print(f"MapsAgent [Reverse Geocoding Error]: {e}")
+            
+        return "Zonă Nespecificată"
 
     def _calculate_distance(self, lat1, lng1, lat2, lng2):
-        """Calculul distanței în metri între două coordonate GPS folosind Haversine."""
-        R = 6371000  # Raza Pământului în metri
+        R = 6371000  
         phi1 = math.radians(lat1)
         phi2 = math.radians(lat2)
         delta_phi = math.radians(lat2 - lat1)
@@ -239,10 +259,6 @@ class MapsAgent:
         return int(R * c)
 
     def get_pois(self, lat, lng):
-        """
-        Caută puncte de interes în raza de 1000m față de coordonatele trimise.
-        Returnează un dict structurat pe categorii cu denumirea și distanța în metri.
-        """
         if not lat or not lng:
             return {}
 
@@ -265,16 +281,9 @@ class MapsAgent:
         """
 
         headers = {'User-Agent': 'RentGuru/1.0'}
-        
         pois_data = {
-            "transport": [],
-            "supermarkets": [],
-            "restaurants": [],
-            "fitness": [],
-            "pharmacies": [],
-            "schools": [],
-            "parks": [],
-            "banks_atms": []
+            "transport": [], "supermarkets": [], "restaurants": [], "fitness": [],
+            "pharmacies": [], "schools": [], "parks": [], "banks_atms": []
         }
 
         try:
@@ -284,19 +293,13 @@ class MapsAgent:
 
             for el in elements:
                 tags = el.get("tags", {})
-                
-                if "center" in el:
-                    el_lat = el["center"]["lat"]
-                    el_lng = el["center"]["lon"]
-                else:
-                    el_lat = el.get("lat")
-                    el_lng = el.get("lon")
+                el_lat = el["center"]["lat"] if "center" in el else el.get("lat")
+                el_lng = el["center"]["lon"] if "center" in el else el.get("lng")
 
                 if not el_lat or not el_lng:
                     continue
 
                 distance = self._calculate_distance(lat, lng, el_lat, el_lng)
-                
                 name = tags.get("name")
 
                 if "highway" in tags and tags["highway"] == "bus_stop":
@@ -305,25 +308,18 @@ class MapsAgent:
                     pois_data["transport"].append({"name": name or "Gară / Stație tren", "distance": distance})
                 elif "station" in tags and tags["station"] == "subway":
                     pois_data["transport"].append({"name": name or f"Stația de Metrou {name if name else ''}".strip(), "distance": distance})
-                
                 elif "shop" in tags and tags["shop"] == "supermarket":
                     pois_data["supermarkets"].append({"name": name or "Supermarket", "distance": distance})
-                
                 elif "amenity" in tags and tags["amenity"] == "restaurant":
                     pois_data["restaurants"].append({"name": name or "Restaurant", "distance": distance})
-                
                 elif "leisure" in tags and tags["leisure"] == "fitness_centre":
                     pois_data["fitness"].append({"name": name or "Sală de Fitness", "distance": distance})
-                
                 elif "amenity" in tags and tags["amenity"] == "pharmacy":
                     pois_data["pharmacies"].append({"name": name or "Farmacie", "distance": distance})
-                
                 elif "amenity" in tags and tags["amenity"] == "school":
                     pois_data["schools"].append({"name": name or "Școală / Liceu", "distance": distance})
-                
                 elif "leisure" in tags and tags["leisure"] == "park":
                     pois_data["parks"].append({"name": name or "Parc", "distance": distance})
-                
                 elif "amenity" in tags and (tags["amenity"] == "bank" or tags["amenity"] == "atm"):
                     label = "Bancă" if tags["amenity"] == "bank" else "ATM"
                     pois_data["banks_atms"].append({"name": name or label, "distance": distance})
@@ -332,11 +328,11 @@ class MapsAgent:
                 pois_data[category] = sorted(pois_data[category], key=lambda x: x["distance"])
 
             pois_data["restaurants"] = pois_data["restaurants"][:5]
-
         except Exception as e:
             print(f"MapsAgent [Overpass Error]: {e}")
             
         return pois_data
+
 
 class DetectiveAgent:
     def __init__(self):
@@ -345,7 +341,7 @@ class DetectiveAgent:
 
     def analyze_listing(self, listing_id, user):
         if not self.client:
-            print("Eroare: Analiza AI nu poate rula deoarece clientul GenAI nu a fost inițializat (lipsește cheia API).")
+            print("Eroare: Agentul nu este inițializat.")
             return None
 
         try:
@@ -353,47 +349,46 @@ class DetectiveAgent:
         except Listing.DoesNotExist:
             print("Eroare: Anunțul nu a fost găsit.")
             return None
-        
+
+        pret_brut = float(listing.price) if listing.price else 0.0
+        moneda_corectata = listing.currency
+
+        text_complet = f"{listing.title or ''} {listing.description or ''}".lower()
+        are_indicii_euro = any(c in text_complet for c in ["€", "eur", "euro"])
+
+        if pret_brut < 1500 or are_indicii_euro:
+            moneda_corectata = "EUR"
+        else:
+            moneda_corectata = "RON"
+
         scor_baza = listing.data_completeness_score or 85
         data_azi = timezone.now().strftime('%d.%m.%Y')
 
-        # Inițializăm MapsAgent
         maps_agent = MapsAgent()
-        
-        # 0. Obținem coordonatele apartamentului pentru a le folosi în validări
         query_location = f"{listing.neighborhood}, {listing.city}"
         lat, lng = maps_agent.get_coordinates(query_location)
         
         verified_claims_text = "Nu au fost identificate afirmații legate de distanțe în descriere."
         poi_data = "Nu s-au putut obține date despre zonă (coordonate lipsă)."
 
-        # 0. Obținem coordonatele apartamentului pentru a le folosi în validări
-        query_location = f"{listing.neighborhood}, {listing.city}"
-        lat, lng = maps_agent.get_coordinates(query_location)
-        
-        verified_claims_text = "Nu au fost identificate afirmații legate de distanțe în descriere."
-
         if lat and lng:
-            # 1. Extragem promisiunile
             claims = extract_distance_claims(listing.description)
-            
-            # 2. Verificăm promisiunile (dacă există)
             verified_claims = []
             if claims:
                 verified_claims = verify_distance_claims(lat, lng, claims, city=listing.city)
             
-            # Formatăm rezultatele pentru promptul AI
             if verified_claims:
                 verified_claims_text = ""
                 for vc in verified_claims:
                     verified_claims_text += f"► {vc['raw_text']} -> DESTINAȚIE REALĂ: {vc['destination']} | TIMP REAL: {vc['real_minutes']} min | VERDICT: {vc['verdict']}\n"
             
-            # 3. Obținem datele POI din Overpass folosind lat și lng
             poi_raw_data = maps_agent.get_pois(lat, lng)
             poi_data = json.dumps(poi_raw_data, indent=2, ensure_ascii=False)
         else:
-            # FALLBACK INTELIGENT: Dacă Nominatim nu găsește strada, îi cerem lui Gemini să folosească ce știe el despre acel cartier
-            poi_data = f"Sistemul GPS a eșuat să găsească adresa exactă. Ignoră complet această eroare tehnică! Te rog să analizezi zona '{listing.neighborhood}, {listing.city}' bazându-te exclusiv pe cunoștințele tale generale. Scrie un paragraf atractiv despre cum este viața în acest cartier (puncte de interes generale, nivel de trai, transport în comun, parcuri cunoscute). Fii util și NU menționa sub nicio formă în raport că îți lipsesc datele sau coordonatele!"
+            poi_data = f"Sistemul GPS a eșuat să găsească adresa exactă. Te rog să analizezi zona '{listing.neighborhood}, {listing.city}' bazându-te pe cunoștințele tale generale."
+
+        alerte_sistem = getattr(listing, 'validation_warnings', [])
+        alerte_text = ", ".join([w.get('message', '') for w in alerte_sistem]) if alerte_sistem else "Nu sunt alerte critice."
 
         prompt = f"""
             Ești un consultant imobiliar senior din România, specializat în analiza de piață. 
@@ -402,33 +397,37 @@ class DetectiveAgent:
             DATE ANUNȚ:
             Locație: {listing.city}, {listing.neighborhood}
             Titlu: {listing.title} 
-            Preț: {listing.price} {listing.currency}
+            Preț total: {listing.price} {moneda_corectata}
+            Suprafață utilă: {getattr(listing, 'useful_surface', 'N/A')} mp
             Descriere: {listing.description}
             Specificații tehnice: {listing.raw_data.get('site_specs', 'N/A')}
+            Alerte sistem (lipsă date): {alerte_text}
             
             Puncte de interes identificate de Maps Agent în zonă (Rază 1km):
             {poi_data}
 
-            VERIFICARE AFIRMAȚII PROPRIETAR:
+            VERIFICARE AFIRMAȚII PROPRIETAR (RUTE REALE GPS):
             {verified_claims_text}
 
             INSTRUCȚIUNI CRITICE PENTRU SCOR ȘI FLAGS:
             1. Scorul final trebuie să reflecte acuratețea și completitudinea datelor. 
-            2. Dacă scorul final este sub 90%, ești OBLIGAT să incluzi în lista "flags" motivele.
+            2. Dacă scorul final este sub 90%, include în lista "flags" motivele.
             3. NU scădea puncte pentru lipsa contactului telefonic.
-            4. Scade din scorul de {scor_baza}% DOAR dacă identifici contradicții sau preț suspect.
+            4. Scade din scorul de {scor_baza}% DOAR dacă identifici contradicții mari sau preț suspect de mic/mare, dar dacă numărul de camere este deja cunoscut sau menționat în text (ex: '2 camere') nu penaliza.
             5. Dacă prețul este cu 10-20% sub medie, etichetează-l ca "Ofertă competitivă" în verdict.
-            6. Data curentă: {data_azi}. Ignoră eroarea "dată în viitor" pentru ziua de azi.
-            7. Folosește Datele POI pentru a redacta o recenzie utilă a zonei în câmpul "proximity". ESTE OBLIGATORIU să incluzi în text distanțele EXACTE în metri pentru principalele puncte de interes găsite (ex: "Stația de metrou Nicolae Teclu se află la 450m, iar supermarketul Kaufland la 800m"). Nu folosi doar generalități precum "la distanță scurtă"!            8. [IMPORTANT] Dacă în secțiunea VERIFICARE AFIRMAȚII PROPRIETAR există verdicte de "UȘOR EXAGERAT" sau "FALS / ÎNȘELĂTOR", PENALIZEAZĂ SCORUL (scade între 5 și 20 de puncte în funcție de gravitate) și menționează clar în "flags" că agentul/proprietarul a exagerat distanțele.
-            8. [IMPORTANT] Dacă în VERIFICARE AFIRMAȚII PROPRIETAR există verdictul "PIN FALS PE HARTĂ (MOMEALĂ)", înseamnă că agentul a pus intenționat pin-ul pe Storia mai aproape de metrou/POI pentru a trișa căutările. PENALIZEAZĂ SCORUL drastic și scrie clar la "Red Flags" acest comportament înșelător legat de harta falsă.
+            6. Data curentă: {data_azi}.
+            7. Folosește Datele POI pentru a redacta o recenzie utilă în câmpul "proximity", incluzând distanțele exacte în metri.
+            8. Dacă în VERIFICARE AFIRMAȚII PROPRIETAR există verdicte de "UȘOR EXAGERAT" sau "FALS / ÎNȘELĂTOR", PENALIZEAZĂ SCORUL și adaugă în flags.
+            9. Dacă există verdictul "PIN FALS PE HARTĂ (MOMEALĂ)", penalizează drastic scorul de integritate.
             
             Returnează DOAR un JSON valid:
             {{
-                "score": <int_scor_ajustat_pornind_de_la_{scor_baza}>,
+                "score": <int_scor_ajustat_porninn_de_la_{scor_baza}>,
                 "flags": ["listă_cu_riscuri_SAU_lipsuri_tehnice"],
                 "proximity": "Sinteză complexă a vieții în această zonă bazată pe datele POI...",
                 "price_analysis": {{
-                    "average_zone_price": <int_valoare_medie_estimată_în_{listing.currency}>,
+                    "price_per_sqm": <float_calculat>,
+                    "average_zone_price_sqm": <int_valoare_medie_estimată_pe_mp_în_{moneda_corectata}>,
                     "difference_percentage": <int_procent_pozitiv_sau_negativ>,
                     "label": "ex: Preț conform pieței / Ofertă excelentă"
                 }},
@@ -469,14 +468,12 @@ class DetectiveAgent:
                 eroare_str = str(e)
                 print(f"[-] Eroare AI (Încercarea {attempt + 1}/{max_retries}): {eroare_str}")
                 
-                # Dacă eroarea este de rețea/suprasolicitare (503 sau 429), așteptăm și reîncercăm
                 if "503" in eroare_str or "429" in eroare_str or "UNAVAILABLE" in eroare_str:
-                    wait_time = 5 * (attempt + 1) # Așteaptă 5s, apoi 10s...
-                    print(f"[*] Server supraîncărcat. Așteptăm {wait_time} secunde înainte de a reîncerca...")
+                    wait_time = 5 * (attempt + 1)
+                    print(f"[*] Server supraîncărcat. Așteptăm {wait_time} secunde...")
                     time.sleep(wait_time)
-                    continue # Trece la următoarea iterație din bucla for
+                    continue 
                 else:
-                    # Dacă e altă eroare (ex: JSON invalid), ne oprim
                     break 
 
         print("[-] Analiza AI a eșuat definitiv după multiple încercări.")

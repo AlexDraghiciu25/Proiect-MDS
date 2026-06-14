@@ -120,13 +120,38 @@
                             </div>
                         </div>
                     </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-12 text-center mt-2">
+                   <div class="row">
+                        <div class="col-12 text-center mt-3 d-flex justify-content-center gap-3">
+                            <!-- Butonul de aplicare filtre existent -->
                             <button type="submit" class="btn btn-filter px-5">
                                 <i class="bi bi-search me-2"></i> Aplică Noile Filtre
                             </button>
+
+                            <!-- Filtru Monedă (RON / EUR) -->
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Monedă</label>
+                                    <div class="btn-group w-100" role="group" aria-label="Filtru Moneda">
+                                        <!-- Opțiunea Ambele -->
+                                        <input type="radio" class="btn-check" name="moneda" id="moneda_toate" value="Toate" 
+                                            {% if not filtru_moneda or filtru_moneda == 'Toate' %}checked{% endif %}>
+                                        <label class="btn btn-outline-secondary" for="moneda_toate">Ambele</label>
+
+                                        <!-- Opțiunea EUR -->
+                                        <input type="radio" class="btn-check" name="moneda" id="moneda_eur" value="EUR" 
+                                            {% if filtru_moneda == 'EUR' %}checked{% endif %}>
+                                        <label class="btn btn-outline-secondary" for="moneda_eur">EUR (€)</label>
+
+                                        <!-- Opțiunea RON -->
+                                        <input type="radio" class="btn-check" name="moneda" id="moneda_ron" value="RON" 
+                                            {% if filtru_moneda == 'RON' %}checked{% endif %}>
+                                        <label class="btn btn-outline-secondary" for="moneda_ron">RON</label>
+                                    </div>
+                                </div>
+                            
+                            <!-- Butonul nou de resetare completă -->
+                            <a href="{% url 'search_results' %}" class="btn btn-outline-secondary px-4 d-flex align-items-center justify-content-center" style="border-radius: 30px; font-weight: 500;">
+                                <i class="bi bi-arrow-counterclockwise me-2"></i> Resetează Filtrele
+                            </a>
                         </div>
                     </div>
                 </form>
@@ -135,106 +160,155 @@
     </section>
 
     <section class="stats-overview py-4">
-    <div class="container">
-        <div class="row g-3">
-            <div class="col-md-4">
-                <div class="card border-0 shadow-sm p-3 text-center" style="background-color: #f8f9fa;">
-                    <small class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">Preț Mediu Zonă</small>
-                    <h4 class="mb-0" style="color: var(--mds-brown);">{{ statistici.pret_mediu }} €</h4>
+        <div class="container">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="card border-0 shadow-sm p-3 text-center" style="background-color: #f8f9fa;">
+                        <small class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">Preț Mediu Zonă</small>
+                        <h4 class="mb-0" style="color: var(--mds-brown);">{{ statistici.pret_mediu }} €</h4>
+                    </div>
                 </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card border-0 shadow-sm p-3 text-center" style="background-color: #f8f9fa;">
-                    <small class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">Suprafață Medie</small>
-                    <h4 class="mb-0" style="color: var(--mds-brown);">{{ statistici.suprafata_medie }} mp</h4>
+                <div class="col-md-4">
+                    <div class="card border-0 shadow-sm p-3 text-center" style="background-color: #f8f9fa;">
+                        <small class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">Suprafață Medie</small>
+                        <h4 class="mb-0" style="color: var(--mds-brown);">{{ statistici.suprafata_medie }} mp</h4>
+                    </div>
                 </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card border-0 shadow-sm p-3 text-center" style="background-color: #f8f9fa;">
-                    <small class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">Preț Mediu / mp</small>
-                    <h4 class="mb-0" style="color: var(--mds-brown);">{{ statistici.pret_per_mp }} €</h4>
+                <div class="col-md-4">
+                    <div class="card border-0 shadow-sm p-3 text-center" style="background-color: #f8f9fa;">
+                        <small class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">Preț Mediu / mp</small>
+                        <h4 class="mb-0" style="color: var(--mds-brown);">{{ statistici.pret_per_mp }} €</h4>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
-</section>
+    </section>
 
     <section class="results-section">
         <div class="container">
-            
+
             <div class="results-count">
                 Am găsit {{ nr_rezultate }} rezultate pentru căutarea ta
             </div>
 
             <div class="row g-4">
-                
+
                 {% for anunt in anunturi %}
-<div class="col-md-6 col-lg-4">
-    <div class="property-card">
-        <div class="property-img-wrapper">
-            {% if anunt.raw_data.site_images %}
-                <img src="{{ anunt.raw_data.site_images.0 }}" alt="{{ anunt.title }}" class="property-img">
-            {% else %}
-                <img src="https://cdn.pixabay.com/photo/2014/12/27/14/37/living-room-581073_1280.jpg" alt="No image" class="property-img">
-            {% endif %}
-            
-            {# --- BADGE AI CORECorectat --- #}
-            {% with raport=anunt.reports.first %}
-                {% if raport %}
-                    <div class="ai-badge {% if raport.integrity_score > 70 %}badge-high{% elif raport.integrity_score > 40 %}badge-mid{% else %}badge-low{% endif %}">
-                        <i class="bi bi-shield-check"></i> {{ raport.integrity_score }}% Sigur
-                    </div>
-                {% else %}
-                    <div class="ai-badge bg-secondary">
-                        <i class="bi bi-hourglass-split"></i> Neanalizat
-                    </div>
-                {% endif %}
-            {% endwith %} {# <-- AICI LIPSEA POSIBIL UNUL #}
-            
-            <div class="property-price">{{ anunt.price|default:"N/A" }} €</div>
-        </div>
+                <div class="col-md-6 col-lg-4">
+                    <div class="property-card h-100 d-flex flex-column">
 
-        <div class="property-info">
-            <h3 class="property-title">{{ anunt.title|truncatechars:40 }}</h3>
-            <p class="property-address">
-                <i class="bi bi-geo-alt me-1"></i>
-                {{ anunt.city|default:"București" }}{% if anunt.neighborhood %}, {{ anunt.neighborhood }}{% endif %}
-            </p>
-            
-            <div class="property-features">
-                <div class="feature-item"><i class="bi bi-rulers"></i> {{ anunt.useful_surface|default:"-" }} mp</div>
-                <div class="feature-item">
-                    <i class="bi bi-car-front" {% if not anunt.has_parking %}style="color: #ccc;"{% endif %}></i> 
-                    {% if anunt.has_parking %}Parcare{% else %}Fără{% endif %}
-                </div>
-                <div class="feature-item">
-                    <i class="bi bi-building"></i> Etaj {{ anunt.floor|default:"-" }}
-                </div>
-            </div>
-            
-            {# --- BUTON ANALIZĂ CORECorectat --- #}
-            {% with raport=anunt.reports.first %}
-                {% if raport %}
-                    <a href="{% url 'result_detail' anunt.id %}" class="btn-view-report">
-                        <i class="bi bi-magic me-1"></i> Vezi Analiza Completă
-                    </a>
-                {% else %}
-                    <a href="{% url 'run_analysis' anunt.id %}" class="btn-view-report" style="background: #8b5e3c; color: white;">
-                        <i class="bi bi-cpu me-1"></i> Analizează cu AI
-                    </a>
-                {% endif %}
-            {% endwith %} {# <-- ȘI AICI TREBUIE ÎNCHIS #}
-        </div>
-    </div>
-</div>
-{% empty %}
-<div class="col-12 text-center py-5">
-    <i class="bi bi-search-heart fs-1 text-muted"></i>
-    <p class="mt-3">Nu am găsit niciun anunț care să se potrivească filtrelor tale.</p>
-    <a href="{% url 'home' %}" class="btn btn-outline-secondary">Înapoi la Dashboard</a>
-</div>
-{% endfor %}
+                        <div class="property-img-wrapper position-relative" style="height: 220px; overflow: hidden;">
+                            
+                            <div class="position-absolute top-0 end-0 m-2" style="z-index: 30;">
+                                <input type="checkbox" class="btn-check compare-checkbox" id="compare-check-{{ anunt.id }}" data-id="{{ anunt.id }}" data-title="{{ anunt.title|truncatechars:25 }}" autocomplete="off">
+                                <label class="btn btn-sm rounded-pill shadow-sm d-flex align-items-center gap-1 py-1 px-2.5" for="compare-check-{{ anunt.id }}" 
+                                    style="background: rgba(255, 255, 255, 0.95); border: 1px solid #dee2e6; color: #495057; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                                    <i class="bi bi-plus-circle compare-icon"></i> <span>Compară</span>
+                                </label>
+                            </div>
 
+                            {% if anunt.raw_data.site_images %}
+                                <div id="carousel-{{ anunt.id }}" class="carousel slide h-100" data-bs-ride="false"><div class="carousel-indicators mb-2">
+                                        {% for image in anunt.raw_data.site_images %}
+                                            <button type="button"
+                                                    data-bs-target="#carousel-{{ anunt.id }}"
+                                                    data-bs-slide-to="{{ forloop.counter0 }}"
+                                                    {% if forloop.first %}class="active" aria-current="true"{% endif %}
+                                                    aria-label="Slide {{ forloop.counter }}">
+                                            </button>
+                                        {% endfor %}
+                                    </div>
+
+                                    <div class="carousel-inner h-100">
+                                        {% for image in anunt.raw_data.site_images %}
+                                            <div class="carousel-item {% if forloop.first %}active{% endif %} h-100">
+                                                <img src="{{ image }}"
+                                                     class="d-block w-100 h-100"
+                                                     style="object-fit: cover;"
+                                                     alt="Imagine {{ anunt.title }}"
+                                                     loading="lazy">
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+
+                                    {% if anunt.raw_data.site_images|length > 1 %}
+                                        <button class="carousel-control-prev" type="button" data-bs-target="#carousel-{{ anunt.id }}" data-bs-slide="prev" style="z-index: 20;">
+                                            <span class="carousel-control-prev-icon" aria-hidden="true" style="background-color: rgba(0,0,0,0.4); border-radius: 50%; padding: 12px;"></span>
+                                            <span class="visually-hidden">Precedent</span>
+                                        </button>
+                                        <button class="carousel-control-next" type="button" data-bs-target="#carousel-{{ anunt.id }}" data-bs-slide="next" style="z-index: 20;">
+                                            <span class="carousel-control-next-icon" aria-hidden="true" style="background-color: rgba(0,0,0,0.4); border-radius: 50%; padding: 12px;"></span>
+                                            <span class="visually-hidden">Următor</span>
+                                        </button>
+                                    {% endif %}
+                                </div>
+                            {% else %}
+                                <img src="https://cdn.pixabay.com/photo/2014/12/27/14/37/living-room-581073_1280.jpg"
+                                     alt="No image"
+                                     class="w-100 h-100"
+                                     style="object-fit: cover;">
+                            {% endif %}
+
+                            <div class="position-absolute top-0 start-0 m-2 z-3" style="z-index: 25;">
+                                {% if anunt.source_website == "OLX.ro" %}
+                                    <span class="badge px-3 py-2 rounded-pill" style="background-color: #002f34; color: #23e5db; font-weight: bold; border: 1px solid #23e5db;">OLX.ro</span>
+                                {% else %}
+                                    <span class="badge bg-success px-3 py-2 rounded-pill" style="font-weight: bold;">Storia.ro</span>
+                                {% endif %}
+                            </div>
+
+                            <div class="property-price" style="z-index: 25;">
+                                {{ anunt.pret_afisat|floatformat:0 }} {{ anunt.moneda_afisata }}
+                            </div>
+                        </div>
+
+                        <div class="property-info d-flex flex-column flex-grow-1">
+                            <h3 class="property-title">{{ anunt.title|truncatechars:40 }}</h3>
+                            <p class="property-address">
+                                <i class="bi bi-geo-alt me-1"></i>
+                                {{ anunt.city|default:"București" }}{% if anunt.neighborhood %}, {{ anunt.neighborhood }}{% endif %}
+                            </p>
+
+                            <div class="property-features mb-3">
+                                <div class="feature-item"><i class="bi bi-rulers"></i> {{ anunt.useful_surface|default:"-" }} mp</div>
+                                <div class="feature-item">
+                                    <i class="bi bi-car-front" {% if not anunt.has_parking %}style="color: #ccc;"{% endif %}></i>
+                                    {% if anunt.has_parking %}Parcare{% else %}Fără{% endif %}
+                                </div>
+                                <div class="feature-item">
+                                    <i class="bi bi-building"></i> Etaj {{ anunt.floor|default:"-" }}
+                                </div>
+                            </div>
+
+                            <div class="mt-auto d-flex flex-column gap-2">
+                                {% with raport=anunt.reports.first %}
+                                    {% if raport %}
+                                        <a href="{% url 'result_detail' anunt.id %}" class="btn-view-report text-center w-100 m-0">
+                                            <i class="bi bi-magic me-1"></i> Vezi Analiza Completă
+                                        </a>
+                                    {% else %}
+                                        <a href="{% url 'run_analysis' anunt.id %}" class="btn-view-report btn-trigger-analysis text-center w-100 m-0" style="background: #8b5e3c; color: white;">
+                                            <i class="bi bi-cpu me-1"></i> Analizează cu AI
+                                        </a>
+                                    {% endif %}
+                                {% endwith %}
+
+                                <a href="{{ anunt.source_url }}" target="_blank" rel="noopener noreferrer"
+                                class="btn btn-sm py-2 d-flex align-items-center justify-content-center btn-sursa-{% if anunt.source_website == 'OLX.ro' %}olx{% else %}storia{% endif %}">
+                                    <i class="bi bi-box-arrow-up-right me-2" style="font-size: 0.85rem;"></i> Sursă originală {{ anunt.source_website }}
+                                </a>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+                {% empty %}
+                <div class="col-12 text-center py-5">
+                    <i class="bi bi-search fs-1 text-muted"></i>
+                    <p class="mt-3 text-muted">Nu am găsit anunțuri pentru filtrele selectate.</p>
+                </div>
+                {% endfor %}
+                </div>
         </div>
     </section>
 
@@ -259,8 +333,130 @@
                 <p class="footer-text">&copy; 2026 RentGuru. Toate drepturile rezervate.</p>
             </div>
         </div>
+        <button class="btn shadow-lg d-flex align-items-center justify-content-center position-fixed" 
+            type="button" 
+            data-bs-toggle="offcanvas" 
+            data-bs-target="#offcanvasAiAgent" 
+            aria-controls="offcanvasAiAgent"
+            style="bottom: 30px; right: 30px; width: 60px; height: 60px; border-radius: 50%; background: var(--mds-brown, #8b5e3c); color: white; z-index: 1050; font-size: 1.5rem;">
+        <i class="bi bi-robot"></i>
+    </button>
+    <!-- Panoul Glisant al Asistentului AI (Offcanvas) -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasAiAgent" aria-labelledby="offcanvasAiAgentLabel" style="width: 400px; border-top-left-radius: 16px; border-bottom-left-radius: 16px;">
+    <!-- Header-ul Offcanvas-ului -->
+    <div class="offcanvas-header text-white" style="background: var(--mds-brown, #8b5e3c);">
+        <h5 class="offcanvas-title fw-bold" id="offcanvasAiAgentLabel">
+            <i class="bi bi-cpu-fill me-2"></i> RentGuru AI Agent
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    
+    <!-- Corpul Principal -->
+    <div class="offcanvas-body d-flex flex-column bg-light">
+        
+        <!-- Zona Dinamică de Informații și Context -->
+        <div class="card border-0 shadow-sm p-3 mb-3" style="background: #fff8f2; border-left: 4px solid #8b5e3c !important;">
+            <small class="fw-bold text-uppercase d-block mb-1" style="color: #8b5e3c; font-size: 0.75rem;">Mod Hibrid de Lucru</small>
+            <p class="small mb-2 text-muted">
+                Pune o întrebare imobiliară generală **sau** selectează proprietăți cu butonul <strong>"Compară"</strong> pentru o matrice tehnică dedicată.
+            </p>
+            
+            <!-- Contorul care arată câte anunțuri sunt selectate activ -->
+            <span id="compareCounter" class="badge bg-secondary w-100 py-2 fs-6" style="border-radius: 6px;">
+                0 Anunțuri Selectate
+            </span>
+        </div>
+
+        <!-- Fereastra și Istoricul Conversației (Flex-grow o împinge în sus) -->
+        <div class="chat-messages flex-grow-1 overflow-y-auto mb-3 p-2 d-flex flex-column gap-2" id="chatWindow" style="max-height: 55vh;">
+            <div class="p-2 rounded-3 bg-white shadow-sm align-self-start small" style="max-width: 85%; border-top-left-radius: 0 !important;">
+                Salut Bianca! 👋 Sunt pregătit. Îmi poți pune orice întrebare generală sau poți bifa proprietățile din pagină ca să le analizăm împreună!
+            </div>
+        </div>
+
+        <!-- UNICUL Formular de Trimis Mesaje (Curățat de duplicări) -->
+        <div class="mt-auto bg-white p-2 rounded-3 shadow-sm border">
+            <form id="aiChatForm" class="d-flex gap-2">
+                <input type="text" id="aiUserInput" class="form-control border-0 small" placeholder="Pune o întrebare sau scrie criteriul de comparare..." required style="box-shadow: none;">
+                <button type="submit" class="btn text-white px-3" style="background: #8b5e3c; border-radius: 8px;">
+                    <i class="bi bi-send-fill"></i>
+                </button>
+            </form>
+        </div>
+
+    </div>
+</div>
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    // Salvăm variabilele de context Django în obiectul global window
+    window.DjangoConfig = {
+        chatEndpointUrl: "{% url 'ai_chat_endpoint' %}",
+        csrfToken: "{{ csrf_token }}"
+    };
+</script>
+<script>
+    // Ascultăm evenimentul de afișare a paginii (inclusiv la apăsarea butonului Înapoi / Back)
+    window.addEventListener('pageshow', function (event) {
+        console.log("Pagina a fost afișată. Resetăm starea butoanelor de analiză...");
+
+        // 1. Căutăm toate butoanele care rulează analiza AI
+        // Adaptat după clasa ta reală: class="btn-view-report ... "
+        const butoaneAnaliza = document.querySelectorAll('.btn-view-report');
+
+        butoaneAnaliza.forEach(buton => {
+            // Readucem textul original și iconița dacă au fost modificate în timpul încărcării
+            if (buton.innerHTML.includes('se încarcă') || buton.innerHTML.includes('Analizează')) {
+                // Dacă butonul este cel maro (fără raport generat încă)
+                if (buton.style.background === 'rgb(139, 94, 60)' || buton.getAttribute('style')?.includes('#8b5e3c')) {
+                    buton.innerHTML = '<i class="bi bi-cpu me-1"></i> Analizează cu AI';
+                } else {
+                    // Dacă era butonul verde de raport deja existent
+                    buton.innerHTML = '<i class="bi bi-magic me-1"></i> Vezi Analiza Completă';
+                }
+            }
+            
+            // Eliminăm proprietatea de disable ca să poată da click din nou
+            buton.classList.remove('disabled');
+            buton.style.pointerEvents = 'auto';
+            buton.style.opacity = '1';
+        });
+
+        // 2. Dacă ai adăugat o rotiță globală sau un overlay/spinner pe tot ecranul, ascunde-l și pe acela:
+        const globalSpinner = document.getElementById('global-loading-spinner'); // Schimbă cu ID-ul tău dacă ai așa ceva
+        if (globalSpinner) {
+            globalSpinner.style.display = 'none';
+        }
+
+        // 3. Oprim eventualele animații de tip pulse de pe carduri
+        const elementsWithPulse = document.querySelectorAll('.animate-pulse');
+        elementsWithPulse.forEach(el => {
+            el.classList.remove('animate-pulse');
+        });
+    });
+</script>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // Când se dă click pe butonul de analiză, îl transformăm pe loc în loading state
+        document.querySelectorAll('.btn-trigger-analysis').forEach(function(buton) {
+            buton.addEventListener('click', function(e) {
+                // Prevenim click-urile multiple accidentale
+                if (this.classList.contains('disabled')) {
+                    e.preventDefault();
+                    return;
+                }
+                
+                // Injectăm rotița spinner din Bootstrap și schimbăm textul
+                this.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Analiza se încarcă...`;
+                this.classList.add('disabled');
+                this.style.pointerEvents = 'none';
+                this.style.opacity = '0.85';
+            });
+        });
+    });
+</script>
+<!-- Încărcăm fișierul JS separat din folderul tău de statice -->
+<script src="{% static 'js/compare_agent.js' %}"></script>
 </body>
 </html>
