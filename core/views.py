@@ -14,7 +14,7 @@ from django.core.paginator import Paginator
 import json
 from django.views.decorators.csrf import csrf_exempt
 import re
-import google.generativeai as genai
+from google import genai
 from .services import DetectiveAgent
 from django.conf import settings
 import requests
@@ -296,183 +296,135 @@ def ai_chat_endpoint(request):
 
     try:
         data = json.loads(request.body)
-        user_criterion = data.get("message", "").strip() # Criteriul ales de Bianca (ex: apropiere mall)
+        user_message = data.get("message", "").strip()
         id_uri_anunturi = data.get("active_listings", [])
 
-        if not id_uri_anunturi or len(id_uri_anunturi) < 2:
-            return JsonResponse({
-                "reply": "⚠️ Te rog să selectezi cel puțin 2 garsoniere/apartamente din pagină pentru a putea realiza o comparație relevantă."
-            })
+        if not user_message:
+            return JsonResponse({"reply": "⚠️ Te rog să introduci un mesaj sau o întrebare pentru RentGuru AI."})
 
-        anunturi = Listing.objects.filter(id__in=id_uri_anunturi)
-        rapoarte_context = []
-        
-        # Instanțiem Agentul tău real din proiect
-        agent_real = DetectiveAgent()
-
-        for anunt in anunturi:
-            # Căutăm raportul existent generat de DetectiveAgent
-            raport = Report.objects.filter(listing=anunt).first()
-            
-            if not raport:
-                try:
-                    # Dacă nu a fost analizat, rulăm analiza ta profundă pe loc
-                    raport = agent_real.analyze_listing(anunt.id, request.user)
-                except Exception as ex_agent:
-                    print(f"Eroare la apelarea DetectiveAgent: {ex_agent}")
-            
-            anunt.refresh_from_db()
-
-            # --- EXTRACTOR EXCLUSIV PENTRU SCHEAMA TA DE REPORT ---
-            # Reconstituim analiza ta profundă într-un format text structurat pe care să-l înțeleagă Gemini
-            context_analiza_ta = ""
-            if raport:
-                context_analiza_ta += f"Verdict Final: {getattr(raport, 'final_verdict', '')}\n"
-                context_analiza_ta += f"Analiză de Proximitate: {getattr(raport, 'proximity_analysis', '')}\n"
-                
-                # Extragere Red Flags (pentru că e salvat ca listă/JSON)
-                flags = getattr(raport, 'red_flags', [])
-                if isinstance(flags, list):
-                    context_analiza_ta += f"Alerte de Integritate (Red Flags): {', '.join(flags)}\n"
-                else:
-                    context_analiza_ta += f"Alerte de Integritate (Red Flags): {flags}\n"
-                
-                # Extragere Price Analysis
-                pret_analysis = getattr(raport, 'price_analysis', '')
-                context_analiza_ta += f"Analiză de Preț Piață: {pret_analysis}\n"
-
-            # Dacă din orice motiv nu avem raportul populat, punem descrierea de pe site ca rezervă
-            if not context_analiza_ta:
-                context_analiza_ta = anunt.description
-
-            rapoarte_context.append({
-                "anunt": anunt,
-                "scor": raport.integrity_score if raport else 70, 
-                "detalii_profunde": context_analiza_ta
-            })
-
-        # ====================================================
-        # 2. CONSTRUIREA MATRICEI DINAMICE (TABELUL HTML)
-        # ====================================================
-        tabel_html = """
-        <div class="table-responsive mt-2">
-            <table class="table table-sm table-bordered bg-white text-center align-middle" style="font-size: 0.8rem; border-radius: 6px; overflow: hidden;">
-                <thead class="table-dark">
-                    <tr>
-                        <th>Caracteristică</th>
-        """
-        for idx, ctx in enumerate(rapoarte_context, 1):
-            tabel_html += f"<th>Proprietatea #{idx}</th>"
-        tabel_html += "</tr></thead><tbody>"
-
-        # Rând: Titlu
-        tabel_html += "<tr><td class='fw-bold table-light text-start'>Titlu</td>"
-        for ctx in rapoarte_context:
-            tabel_html += f"<td class='text-truncate' style='max-width: 130px;' title='{ctx['anunt'].title}'>{ctx['anunt'].title}</td>"
-        tabel_html += "</tr>"
-
-        # Rând: Preț (Corectat structural Monedă)
-        tabel_html += "<tr><td class='fw-bold table-light text-start'>Preț</td>"
-        for ctx in rapoarte_context:
-            pret_brut = ctx['anunt'].price or 0
-            moneda_raw = str(ctx['anunt'].currency).upper()
-            
-            # Corecție inteligentă de interfață: 
-            # Dacă prețul e sub 1500, în București e 100% vorba de EURO, chiar dacă scraperul a citit RON de pe OLX
-            if "EUR" in moneda_raw or "€" in moneda_raw or pret_brut < 1500:
-                moneda_simbol = "€"
-            else:
-                moneda_simbol = "RON"
-                
-            tabel_html += f"<td class='fw-bold text-success'>{int(pret_brut) if pret_brut else 'N/A'} {moneda_simbol}</td>"
-        tabel_html += "</tr>"
-
-        # Rând: Suprafață
-        tabel_html += "<tr><td class='fw-bold table-light text-start'>Suprafață</td>"
-        for ctx in rapoarte_context:
-            suprafata = ctx['anunt'].useful_surface
-            tabel_html += f"<td>{int(suprafata) if suprafata else '50'} mp</td>"
-        tabel_html += "</tr>"
-
-        # Rând: Siguranță AI
-        tabel_html += "<tr><td class='fw-bold table-light text-start'>Siguranță AI</td>"
-        for ctx in rapoarte_context:
-            scor = ctx['scor']
-            badge_class = "bg-success" if scor > 70 else ("bg-warning text-dark" if scor > 45 else "bg-danger")
-            tabel_html += f"<td><span class='badge {badge_class}'>{scor}%</span></td>"
-        tabel_html += "</tr>"
-
-        tabel_html += "</tbody></table></div>"
-
-        # ====================================================
-        # 3. CONSTRUIREA CONTEXTULUI AVANSAT PENTRU LLM (GEMINI)
-        # ====================================================
+        # Verificăm dacă avem anunțuri selectate pentru a determina modul de lucru
+        are_anunturi = len(id_uri_anunturi) >= 1
+        tabel_html = ""
         context_proprietati_text = ""
-        for idx, ctx in enumerate(rapoarte_context, 1):
-            context_proprietati_text += f"\n--- PROPRIETATEA #{idx} ---\n"
-            context_proprietati_text += f"Titlu: {ctx['anunt'].title}\n"
-            context_proprietati_text += f"Pret în DB: {ctx['anunt'].price} {ctx['anunt'].currency}\n"
-            context_proprietati_text += f"Suprafata utila: {ctx['anunt'].useful_surface} mp\n"
-            context_proprietati_text += f"Scor de integritate: {ctx['scor']}%\n"
-            context_proprietati_text += f"DATE STRUCURATE DIN DETECTIVEAGENT:\n{ctx['detalii_profunde']}\n"
-            context_proprietati_text += f"Descriere text originala: {ctx['anunt'].description}\n"
 
-        prompt_llm = f"""
-        Ești RentGuru AI, un expert imobiliar din București de elită și un auditor tehnic avansat.
-        Sarcina ta este să realizezi o analiză comparativă extrem de nuanțată a proprietăților transmise, punând accent STRICT pe următorul criteriu cerut de utilizator: "{user_criterion}".
-        
-        Iată datele complete de audit (inclusiv verdictele, alertele 'red flags' și analizele de proximitate extrase de partenerul tău, DetectiveAgent):
-        {context_proprietati_text}
-        
-        Cerințe obligatorii pentru răspuns:
-        1. Analizează datele în mod inteligent. Corelează criteriul utilizatorului ("{user_criterion}") cu informațiile din text. De exemplu, dacă cere 'apropiere mall', verifică în analizele de proximitate și descrieri ce mall-uri sau complexe (ex: Plaza, AFI) sunt menționate și explică care e mai aproape. Dacă cere 'zgomot' sau 'metrou', folosește datele specifice din rapoarte.
-        2. Scoate în evidență problemele critice raportate în DetectiveAgent (cum ar fi contradicțiile legate de lipsa liftului la etaje superioare sau lipsa garanției) și explică cum influențează ele decizia finală pe baza criteriului ales.
-        3. Dacă utilizatorul cere o analiză 'generală', oferă o sinteză echilibrată bazată pe raportul calitate-preț și siguranță.
-        4. Răspunsul tău trebuie să fie formatat direct în HTML (folosește doar <strong>, <em>, <br>, <ul>, <li>). NU folosi formatare markdown (fără caractere de tipul asteriscuri sau hashtag-uri).
-        """
+        if are_anunturi:
+            anunturi = Listing.objects.filter(id__in=id_uri_anunturi)
+            rapoarte_context = []
+            agent_real = DetectiveAgent()
 
-        # ====================================================
-        # 4. APEL LIVE CĂTRE GEMINI PRIN API v1
-        # ====================================================
-        try:
-            api_key = getattr(settings, "GEMINI_API_KEY", "CHEIA_TA_GEMINI_AICI")
-            url_gemini = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={api_key}"
-            
-            payload = {
-                "contents": [{
-                    "parts": [{"text": prompt_llm}]
-                }]
-            }
-            headers = {"Content-Type": "application/json"}
-            
-            response = requests.post(url_gemini, json=payload, headers=headers, timeout=30)
-            
-            if response.status_code == 200:
-                res_data = response.json()
-                opinie_ai = res_data["candidates"][0]["content"]["parts"][0]["text"]
-            else:
-                # Backup stabil pe modelul 1.5-flash
-                url_backup = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
-                backup_resp = requests.post(url_backup, json=payload, headers=headers, timeout=30)
-                if backup_resp.status_code == 200:
-                    opinie_ai = backup_resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-                else:
-                    opinie_ai = "🤖 API Error: Modulul live imobiliar nu a putut returna concluzia din cauza unei erori de conexiune."
+            for anunt in anunturi:
+                raport = Report.objects.filter(listing_id=anunt.id).first()
+                if not raport:
+                    try:
+                        raport = agent_real.analyze_listing(anunt.id, request.user)
+                    except Exception as ex_agent:
+                        print(f"Eroare la apelarea DetectiveAgent: {ex_agent}")
                 
-        except Exception as e_api:
-            opinie_ai = f"🤖 Conexiunea live cu serverul AI a eșuat temporar: {e_api}"
+                if hasattr(anunt, '_prefetched_objects_cache'):
+                    anunt._prefetched_objects_cache = {}
+                anunt.refresh_from_db()
 
-        # Tritem rezultatul complet structurat în interfață
-        reply_final = (
-            f"📊 <strong>Comparație Inteligentă Generată de RentGuru AI:</strong><br>"
-            f"Am procesat specificațiile complete în raport cu cerința ta. Iată matricea tehnică extrasă:<br>"
-            f"{tabel_html}"
-            f"<div class='mt-3 border-top pt-2 text-dark' style='font-size: 0.85rem; line-height: 1.5;'>"
-            f"{opinie_ai}"
-            f"</div>"
-        )
+                context_analiza_ta = ""
+                if raport:
+                    context_analiza_ta += f"Verdict Final: {getattr(raport, 'final_verdict', '')}\n"
+                    context_analiza_ta += f"Analiză de Proximitate: {getattr(raport, 'proximity_analysis', '')}\n"
+                    flags = getattr(raport, 'red_flags', [])
+                    context_analiza_ta += f"Red Flags: {', '.join(flags) if isinstance(flags, list) else flags}\n"
+                    context_analiza_ta += f"Analiză de Preț: {getattr(raport, 'price_analysis', '')}\n"
+
+                rapoarte_context.append({
+                    "anunt": anunt,
+                    "scor": raport.integrity_score if raport else 70, 
+                    "detalii_profunde": context_analiza_ta
+                })
+
+            # Generăm Matricea Tehnică HTML doar dacă utilizatorul vrea o comparație/analiză pe anunțuri
+            tabel_html = """
+            <div class="table-responsive mt-2">
+                <table class="table table-sm table-bordered bg-white text-center align-middle" style="font-size: 0.8rem; border-radius: 6px; overflow: hidden;">
+                    <thead class="table-dark">
+                        <tr><th>Caracteristică</th>
+            """
+            for idx, ctx in enumerate(rapoarte_context, 1):
+                tabel_html += f"<th>Proprietatea #{idx}</th>"
+            tabel_html += "</tr></thead><tbody><tr><td class='fw-bold table-light text-start'>Titlu</td>"
+            for ctx in rapoarte_context:
+                tabel_html += f"<td class='text-truncate' style='max-width: 130px;' title='{ctx['anunt'].title}'>{ctx['anunt'].title}</td>"
+            tabel_html += "</tr><tr><td class='fw-bold table-light text-start'>Preț</td>"
+            for ctx in rapoarte_context:
+                moneda = "€" if "EUR" in str(ctx['anunt'].currency).upper() or ctx['anunt'].price < 1500 else "RON"
+                tabel_html += f"<td class='fw-bold text-success'>{int(ctx['anunt'].price) if ctx['anunt'].price else 'N/A'} {moneda}</td>"
+            tabel_html += "</tr><tr><td class='fw-bold table-light text-start'>Suprafață</td>"
+            for ctx in rapoarte_context:
+                tabel_html += f"<td>{int(ctx['anunt'].useful_surface) if ctx['anunt'].useful_surface else '50'} mp</td>"
+            tabel_html += "</tr><tr><td class='fw-bold table-light text-start'>Siguranță AI</td>"
+            for ctx in rapoarte_context:
+                scor = ctx['scor']
+                badge = "bg-success" if scor > 70 else ("bg-warning text-dark" if scor > 45 else "bg-danger")
+                tabel_html += f"<td><span class='badge {badge}'>{scor}%</span></td>"
+            tabel_html += "</tr></tbody></table></div>"
+
+            for idx, ctx in enumerate(rapoarte_context, 1):
+                context_proprietati_text += f"\n--- PROPRIETATEA #{idx} ---\n"
+                context_proprietati_text += f"Titlu: {ctx['anunt'].title}\n"
+                context_proprietati_text += f"DATE AUDIT:\n{ctx['detalii_profunde']}\n"
+
+        # Constructia dinamică a promptului în funcție de context (Hibrid)
+        if are_anunturi:
+            prompt_llm = f"""
+            Ești RentGuru AI, un expert imobiliar din București de elită.
+            Utilizatorul a selectat câteva proprietăți din listă și te întreabă următorul lucru: "{user_message}".
+            
+            Datele tehnice ale proprietăților selectate:
+            {context_proprietati_text}
+            
+            Cerințe:
+            1. Răspunde direct la întrebarea utilizatorului ("{user_message}") analizând proprietățile oferite.
+            2. Formatează răspunsul exclusiv în HTML curat (folosește <strong>, <br>, <ul>, <li>). Fără markdown standard (fără ***, fără ```html).
+            """
+        else:
+            prompt_llm = f"""
+            Ești RentGuru AI, un asistent virtual inteligent, expert în piața imobiliară din România (în special București) și consultanță juridică/tehnică pentru chiriași.
+            Utilizatorul nu are proprietăți selectate acum, ci îți adresează o întrebare generală de consultanță: "{user_message}".
+            
+            Cerințe:
+            1. Oferă un răspuns profesionist, detaliat și extrem de util la întrebarea: "{user_message}".
+            2. Dacă întrebarea nu are nicio legătură cu imobiliarele, chiriile, Bucureștiul sau aspectele conexe, redirecționează politicos discuția spre zona imobiliară.
+            3. Formatează răspunsul exclusiv în HTML curat (folosește <strong>, <br>, <ul>, <li>). Fără markdown standard. Păstrează un ton prietenos dar avizat.
+            """
+
+        # Apel API prin noul client stabil
+        try:
+            api_key = getattr(settings, "GEMINI_API_KEY", "CHEIA_TA_AICI")
+            client = genai.Client(api_key=api_key)
+            
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt_llm,
+            )
+            opinie_ai = response.text
+        except Exception as e_api:
+            print(f"Eroare GenAI API: {e_api}")
+            opinie_ai = f"🤖 Asistentul RentGuru întâmpină probleme tehnice. Detalii: {str(e_api)[:100]}"
+
+        # împachetarea răspunsului final
+        if are_anunturi:
+            reply_final = (
+                f"📊 <strong>Analiză Personalizată RentGuru AI pentru proprietățile selectate:</strong><br>"
+                f"{tabel_html}"
+                f"<div class='mt-3 border-top pt-2 text-dark' style='font-size: 0.85rem; line-height: 1.5;'>"
+                f"{opinie_ai}"
+                f"</div>"
+            )
+        else:
+            reply_final = (
+                f"🤖 <strong>RentGuru AI Consultant Imobiliar:</strong><br>"
+                f"<div class='mt-2 text-dark' style='font-size: 0.85rem; line-height: 1.5;'>"
+                f"{opinie_ai}"
+                f"</div>"
+            )
 
         return JsonResponse({"reply": reply_final})
 
     except Exception as e:
-        return JsonResponse({"reply": f"❌ Eroare la analiza comparativă: {str(e)}"}, status=400)
+        return JsonResponse({"reply": f"❌ Eroare la procesarea chatului: {str(e)}"}, status=400)

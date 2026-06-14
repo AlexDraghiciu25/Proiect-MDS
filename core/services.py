@@ -1,4 +1,5 @@
 import json
+import re
 from google import genai
 from google.genai import types
 from django.conf import settings
@@ -9,7 +10,8 @@ class DetectiveAgent:
     def __init__(self):
         # Inițializarea noului client Google GenAI
         self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
-        self.model_id = 'gemini-2.5-flash'
+        # REPARAT: Folosim modelul stabil de producție compatibil cu v1/v1beta în noul SDK
+        self.model_id = 'gemini-1.5-flash'
 
     def analyze_listing(self, listing_id, user):
         data_azi = timezone.now().strftime('%d.%m.%Y')
@@ -19,11 +21,24 @@ class DetectiveAgent:
             print("Eroare: Anunțul nu a fost găsit.")
             return None
         
+        # ====================================================
+        # [CORECȚIE STRUCTURALĂ] NORMALIZARE MONEDĂ PENTRU GEMINI
+        # ====================================================
+        pret_brut = float(listing.price) if listing.price else 0.0
+        moneda_corectata = listing.currency
+
+        # Scanăm tot textul disponibil (titlu + descriere) după indicii de Euro
+        text_complet = f"{listing.title or ''} {listing.description or ''}".lower()
+        are_indicii_euro = any(c in text_complet for c in ["€", "eur", "euro"])
+
+        if pret_brut < 1500 or are_indicii_euro:
+            moneda_corectata = "EUR"
+        else:
+            moneda_corectata = "RON"
+        # ====================================================
+
         scor_baza = listing.data_completeness_score or 85
         
-        # Presupunem că ai salvat avertismentele generate de tool-ul nostru 
-        # într-un câmp de tip JSON (ex: validation_warnings) sau le recalculezi aici.
-        # Dacă nu, poți lăsa doar scorul, dar e mai sigur să i le dai.
         alerte_sistem = getattr(listing, 'validation_warnings', [])
         alerte_text = ", ".join([w.get('message', '') for w in alerte_sistem]) if alerte_sistem else "Nu sunt alerte critice."
 
@@ -34,7 +49,7 @@ class DetectiveAgent:
             DATE ANUNȚ:
             Locație: {listing.city}, {listing.neighborhood}
             Titlu: {listing.title} 
-            Preț total: {listing.price} {listing.currency}
+            Preț total: {listing.price} {moneda_corectata}
             Suprafață utilă: {getattr(listing, 'useful_surface', 'N/A')} mp
             Descriere: {listing.description}
             Specificații tehnice: {listing.raw_data.get('site_specs', 'N/A')}
@@ -50,12 +65,12 @@ class DetectiveAgent:
 
             Returnează DOAR un JSON valid:
             {{
-                "score": <int_scor_ajustat_pornind_de_la_{scor_baza}>,
+                "score": <int_scor_ajustat_porninn_de_la_{scor_baza}>,
                 "flags": ["listă_cu_riscuri_SAU_lipsuri_tehnice"],
                 "proximity": "analiză_facilități_și_zgomot_din_zona_{listing.neighborhood}",
                 "price_analysis": {{
                     "price_per_sqm": <float_calculat>,
-                    "average_zone_price_sqm": <int_valoare_medie_estimată_pe_mp_în_{listing.currency}>,
+                    "average_zone_price_sqm": <int_valoare_medie_estimată_pe_mp_în_{moneda_corectata}>,
                     "difference_percentage": <int_procent_pozitiv_sau_negativ>,
                     "label": "ex: Preț conform pieței / Ofertă excelentă / Peste media zonei"
                 }},
@@ -82,5 +97,5 @@ class DetectiveAgent:
                 price_analysis=data.get('price_analysis'),
             )
         except Exception as e:
-            print(f"Eroare AI: {e}")
+            print(f"Eroare AI în DetectiveAgent: {e}")
             return None

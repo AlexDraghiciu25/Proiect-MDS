@@ -1,155 +1,107 @@
-// Mapă globală și stări pentru Fluxul în Doi Pași
-let proprietatiSelectate = new Set();
-let asteaptaCriteriuUtilizator = false;
-let iduriDeTrimisTemporar = [];
+document.addEventListener("DOMContentLoaded", function () {
+    const inputField = document.getElementById("universal-chat-input");
+    const sendButton = document.getElementById("universal-send-btn");
+    const messagesContainer = document.getElementById("chat-messages-container");
+    const counterBadge = document.getElementById("selected-counter-badge");
 
-document.addEventListener('DOMContentLoaded', function() {
-    // 1. Ascultăm checkbox-urile de comparare
-    document.querySelectorAll('.compare-checkbox').forEach(checkbox => {
-        checkbox.addEventListener('change', function() {
-            const idAnunt = this.getAttribute('data-id');
-            const label = document.querySelector(`label[for="${this.id}"]`);
-            const icon = label.querySelector('.compare-icon');
-            
-            if (this.checked) {
-                proprietatiSelectate.add(idAnunt);
-                label.style.backgroundColor = '#002f34';
-                label.style.color = '#fff';
-                label.style.borderColor = '#002f34';
-                if (icon) icon.className = 'bi bi-check-circle-fill compare-icon';
+    // Funcție rapidă de actualizare a numărului de anunțuri selectate în timp real
+    function updateSelectedBadge() {
+        const checkedListings = document.querySelectorAll(".listing-checkbox:checked");
+        if (counterBadge) {
+            counterBadge.innerText = `${checkedListings.length} Anunțuri Selectate`;
+            if (checkedListings.length > 0) {
+                counterBadge.className = "badge bg-success text-white";
             } else {
-                proprietatiSelectate.delete(idAnunt);
-                label.style.backgroundColor = 'rgba(255, 255, 255, 0.95)';
-                label.style.color = '#495057';
-                label.style.borderColor = '#dee2e6';
-                if (icon) icon.className = 'bi bi-plus-circle compare-icon';
+                counterBadge.className = "badge bg-secondary text-white";
             }
-            actualizeazaPanouAi();
-        });
+        }
+    }
+
+    // Ascultăm schimbările pe checkbox-urile de anunțuri
+    document.querySelectorAll(".listing-checkbox").forEach(box => {
+        box.addEventListener("change", updateSelectedBadge);
     });
 
-    // 2. [MODIFICAT] Click pe butonul de comparare - PASUL 1 DIN FLUX
-    const btnCompare = document.getElementById('btnSubmitComparison');
-    if (btnCompare) {
-        btnCompare.addEventListener('click', function() {
-            iduriDeTrimisTemporar = Array.from(proprietatiSelectate);
-            asteaptaCriteriuUtilizator = true; // Activăm starea de așteptare filtru semantic
+    // Logica principală de trimitere mesaj
+    function handleSendMessage() {
+        const textMessage = inputField.value.trim();
+        if (!textMessage) return;
 
-            const chatWindow = document.getElementById('chatWindow');
-            
-            // Agentul preia controlul și întreabă înainte de a procesa în backend
-            const promptDiv = document.createElement('div');
-            promptDiv.className = 'p-2 rounded-3 bg-white shadow-sm align-self-start small fw-medium';
-            promptDiv.style.borderLeft = '4px solid #8b5e3c';
-            promptDiv.style.borderTopLeftRadius = '0';
-            promptDiv.innerHTML = `🤖 <strong>RentGuru Agent:</strong> Am blocat în memorie cele ${iduriDeTrimisTemporar.length} proprietăți!<br><br>
-                                   Înainte de a rula matricea tehnică, te rog să îmi spui: <strong>ai un criteriu preferențial după care vrei să fac recomandarea?</strong> (Ex: <em>apropiere metrou, zonă liniștită, cel mai mic preț</em>).<br><br>
-                                   Dacă vrei o analiză generală, scrie simplu: <strong>"general"</strong>.`;
-            
-            chatWindow.appendChild(promptDiv);
-            chatWindow.scrollTop = chatWindow.scrollHeight;
+        // Afișăm instant mesajul utilizatorului în chatbox
+        const userBubble = document.createElement("div");
+        userBubble.className = "p-2 rounded bg-primary text-white mb-2 text-end ms-5 shadow-sm";
+        userBubble.style.borderRadius = "12px 12px 0 12px";
+        userBubble.innerHTML = `<strong>Tu:</strong> ${textMessage}`;
+        messagesContainer.appendChild(userBubble);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
-            // Focalizăm automat căsuța de text ca utilizatorul să scrie criteriul
-            const inputField = document.getElementById('aiUserInput');
-            if (inputField) {
-                inputField.placeholder = "Scrie criteriul tău aici (sau 'general')...";
-                inputField.focus();
-            }
+        // Resetăm inputul text pentru a fi pregătit de următoarea întrebare
+        inputField.value = "";
+
+        // Colectăm id-urile anunțurilor bifate din grila html
+        const activeListings = [];
+        document.querySelectorAll(".listing-checkbox:checked").forEach(cb => {
+            activeListings.push(cb.value);
         });
-    }
 
-    // 3. [MODIFICAT] Trimiterea formularului de text - PASUL 2 DIN FLUX
-    const chatForm = document.getElementById('aiChatForm');
-    if (chatForm) {
-        chatForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const inputField = document.getElementById('aiUserInput');
-            const text = inputField.value.trim();
-            if (!text) return;
-            
-            if (asteaptaCriteriuUtilizator) {
-                // Dacă suntem în fluxul în doi pași, trimitem textul drept criteriu + ID-urile salvate anterior
-                trimiteMesajLaAgent(text, iduriDeTrimisTemporar);
-                
-                // Resetăm starea după trimitere, revenind la modul de chat liber
-                asteaptaCriteriuUtilizator = false;
-                inputField.placeholder = "Pune o întrebare suplimentară...";
-            } else {
-                // Modul normal de chat suplimentar
-                trimiteMesajLaAgent(text, Array.from(proprietatiSelectate));
-            }
-            
-            inputField.value = '';
-        });
-    }
-});
+        // Afișăm un indicator de încărcare (typing status) animat pentru utilizator
+        const loadingBubble = document.createElement("div");
+        loadingBubble.className = "p-2 rounded bg-white text-muted mb-2 border text-start me-5 shadow-xs animate-pulse";
+        loadingBubble.id = "guru-typing-bubble";
+        loadingBubble.innerHTML = "Thinking... 🧠 RentGuru analizează...";
+        messagesContainer.appendChild(loadingBubble);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
-function actualizeazaPanouAi() {
-    const counter = document.getElementById('compareCounter');
-    const btnCompare = document.getElementById('btnSubmitComparison');
-    if (!counter) return;
+        // Preluăm tokenul CSRF necesar securității Django din cookie sau tag
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || "";
 
-    const nrElemente = proprietatiSelectate.size;
-    counter.innerText = `${nrElemente} Proprietăți Selectate`;
-    
-    if (nrElemente >= 2) {
-        counter.className = "badge bg-success w-100 py-2 fs-6 mb-2";
-        if (btnCompare) btnCompare.classList.remove('d-none');
-    } else {
-        counter.className = "badge bg-secondary w-100 py-2 fs-6 mb-2";
-        if (btnCompare) btnCompare.classList.add('d-none');
-    }
-}
-
-function trimiteMesajLaAgent(mesajText, iduriProprietati) {
-    const chatWindow = document.getElementById('chatWindow');
-    if (!chatWindow) return;
-    
-    const userDiv = document.createElement('div');
-    userDiv.className = 'p-2 rounded-3 text-white align-self-end small';
-    userDiv.style.backgroundColor = '#a0714f';
-    userDiv.style.maxWidth = '85%';
-    userDiv.style.borderTopRightRadius = '0';
-    userDiv.innerText = mesajText;
-    chatWindow.appendChild(userDiv);
-    
-    chatWindow.scrollTop = chatWindow.scrollHeight;
-
-    const thinkingDiv = document.createElement('div');
-    thinkingDiv.className = 'p-2 rounded-3 bg-white shadow-sm align-self-start small text-muted';
-    thinkingDiv.innerHTML = '<i class="bi bi-cpu-fill spinning"></i> RentGuru procesează criteriile introduse...';
-    chatWindow.appendChild(thinkingDiv);
-    chatWindow.scrollTop = chatWindow.scrollHeight;
-
-    const url = window.DjangoConfig ? window.DjangoConfig.chatEndpointUrl : '/ai-chat/';
-    const token = window.DjangoConfig ? window.DjangoConfig.csrfToken : '';
-
-    fetch(url, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "X-CSRFToken": token
-        },
-        body: JSON.stringify({
-            message: mesajText, // Criteriul dat de utilizator la Pasul 2
-            active_listings: iduriProprietati
+        // Lansăm cererea hibridă către backend
+        fetch("/ai-chat/", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": csrfToken
+            },
+            body: JSON.stringify({
+                message: textMessage,
+                active_listings: activeListings
+            })
         })
-    })
-    .then(response => response.json())
-    .then(data => {
-        thinkingDiv.remove();
-        
-        const agentDiv = document.createElement('div');
-        agentDiv.className = 'p-2 rounded-3 bg-white shadow-sm align-self-start small';
-        agentDiv.style.maxWidth = '85%';
-        agentDiv.style.borderTopLeftRadius = '0';
-        agentDiv.innerHTML = data.reply; 
-        chatWindow.appendChild(agentDiv);
-        
-        chatWindow.scrollTop = chatWindow.scrollHeight;
-    })
-    .catch(error => {
-        thinkingDiv.remove();
-        console.error("Eroare comunicare Agent AI:", error);
+        .then(response => response.json())
+        .then(data => {
+            // Ștergem bubba de loading
+            const typingElement = document.getElementById("guru-typing-bubble");
+            if (typingElement) typingElement.remove();
+
+            // Creăm bubba de răspuns cu stilul grafic din RentGuru
+            const aiBubble = document.createElement("div");
+            aiBubble.className = "p-3 rounded bg-white text-dark mb-2 text-start me-5 shadow-sm border-start border-4 border-primary";
+            aiBubble.style.borderRadius = "0 12px 12px 12px";
+            aiBubble.innerHTML = data.reply;
+            
+            messagesContainer.appendChild(aiBubble);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        })
+        .catch(error => {
+            console.error("Eroare Chat:", error);
+            const typingElement = document.getElementById("guru-typing-bubble");
+            if (typingElement) typingElement.remove();
+
+            const errorBubble = document.createElement("div");
+            errorBubble.className = "p-2 rounded bg-danger text-white mb-2 text-start me-5";
+            errorBubble.innerText = "❌ S-a produs o eroare de rețea. Te rog reîncearcă.";
+            messagesContainer.appendChild(errorBubble);
+        });
+    }
+
+    // Atașăm evenimentele pe buton și pe tasta Enter pentru un UX fluid
+    sendButton.addEventListener("click", handleSendMessage);
+    inputField.addEventListener("keypress", function (e) {
+        if (e.key === "Enter") {
+            handleSendMessage();
+        }
     });
-}
+
+    // Inițializare stare badge la încărcarea paginii
+    updateSelectedBadge();
+});

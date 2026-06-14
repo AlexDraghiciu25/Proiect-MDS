@@ -343,6 +343,7 @@
     </button>
     <!-- Panoul Glisant al Asistentului AI (Offcanvas) -->
 <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasAiAgent" aria-labelledby="offcanvasAiAgentLabel" style="width: 400px; border-top-left-radius: 16px; border-bottom-left-radius: 16px;">
+    <!-- Header-ul Offcanvas-ului -->
     <div class="offcanvas-header text-white" style="background: var(--mds-brown, #8b5e3c);">
         <h5 class="offcanvas-title fw-bold" id="offcanvasAiAgentLabel">
             <i class="bi bi-cpu-fill me-2"></i> RentGuru AI Agent
@@ -350,50 +351,39 @@
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
     </div>
     
+    <!-- Corpul Principal -->
     <div class="offcanvas-body d-flex flex-column bg-light">
-    <!-- Instrucțiuni și Contor Dinamic -->
-    <div class="card border-0 shadow-sm p-3 mb-3" style="background: #fff8f2; border-left: 4px solid #8b5e3c !important;">
-        <small class="fw-bold text-uppercase d-block mb-1" style="color: #8b5e3c; font-size: 0.75rem;">Modul Comparare Vizuală</small>
-        <p class="small mb-2 text-muted">Selectează proprietățile dorite direct din pagină folosind butonul <strong>"Compară"</strong> de pe poze.</p>
         
-        <!-- Badge-ul care numără selecțiile -->
-        <span id="compareCounter" class="badge bg-secondary w-100 py-2 fs-6 mb-2" style="border-radius: 6px;">
-            0 Anunțuri Selectate
-        </span>
-
-        <!-- Butonul care trimite automat comanda la AI -->
-        <button id="btnSubmitComparison" class="btn btn-sm text-white w-100 py-2 fw-bold d-none" style="background: #8b5e3c; border-radius: 6px;">
-            <i class="bi bi-arrow-left-right me-1"></i> Cere AI-ului să le compare
-        </button>
-    </div>
-
-    <!-- Istoricul Conversației -->
-    <div class="chat-messages flex-grow-1 overflow-y-auto mb-3 p-2 d-flex flex-column gap-2" id="chatWindow" style="max-height: 50vh;">
-        <div class="p-2 rounded-3 bg-white shadow-sm align-self-start small" style="max-width: 85%; border-top-left-radius: 0 !important;">
-            Salut Bianca! 👋 Bifează căsuțele "Compară" de pe proprietățile care îți plac, apoi apasă pe butonul de mai sus și eu le voi analiza tehnic instant!
+        <!-- Zona Dinamică de Informații și Context -->
+        <div class="card border-0 shadow-sm p-3 mb-3" style="background: #fff8f2; border-left: 4px solid #8b5e3c !important;">
+            <small class="fw-bold text-uppercase d-block mb-1" style="color: #8b5e3c; font-size: 0.75rem;">Mod Hibrid de Lucru</small>
+            <p class="small mb-2 text-muted">
+                Pune o întrebare imobiliară generală **sau** selectează proprietăți cu butonul <strong>"Compară"</strong> pentru o matrice tehnică dedicată.
+            </p>
+            
+            <!-- Contorul care arată câte anunțuri sunt selectate activ -->
+            <span id="compareCounter" class="badge bg-secondary w-100 py-2 fs-6" style="border-radius: 6px;">
+                0 Anunțuri Selectate
+            </span>
         </div>
-    </div>
 
-    <!-- Zona clasică de text pentru întrebări suplimentare -->
-    <div class="mt-auto bg-white p-2 rounded-3 shadow-sm border">
-        <form id="aiChatForm" class="d-flex gap-2">
-            <input type="text" id="aiUserInput" class="form-control border-0 small" placeholder="Pune o întrebare suplimentară..." required style="box-shadow: none;">
-            <button type="submit" class="btn text-white px-3" style="background: #8b5e3c; border-radius: 8px;">
-                <i class="bi bi-send-fill"></i>
-            </button>
-        </form>
-    </div>
-</div>
+        <!-- Fereastra și Istoricul Conversației (Flex-grow o împinge în sus) -->
+        <div class="chat-messages flex-grow-1 overflow-y-auto mb-3 p-2 d-flex flex-column gap-2" id="chatWindow" style="max-height: 55vh;">
+            <div class="p-2 rounded-3 bg-white shadow-sm align-self-start small" style="max-width: 85%; border-top-left-radius: 0 !important;">
+                Salut Bianca! 👋 Sunt pregătit. Îmi poți pune orice întrebare generală sau poți bifa proprietățile din pagină ca să le analizăm împreună!
+            </div>
+        </div>
 
-        <!-- Zona de introducere text -->
+        <!-- UNICUL Formular de Trimis Mesaje (Curățat de duplicări) -->
         <div class="mt-auto bg-white p-2 rounded-3 shadow-sm border">
             <form id="aiChatForm" class="d-flex gap-2">
-                <input type="text" id="aiUserInput" class="form-control border-0 small" placeholder="Ex: Compară primele 2 garsoniere..." required style="box-shadow: none;">
+                <input type="text" id="aiUserInput" class="form-control border-0 small" placeholder="Pune o întrebare sau scrie criteriul de comparare..." required style="box-shadow: none;">
                 <button type="submit" class="btn text-white px-3" style="background: #8b5e3c; border-radius: 8px;">
                     <i class="bi bi-send-fill"></i>
                 </button>
             </form>
         </div>
+
     </div>
 </div>
     </footer>
