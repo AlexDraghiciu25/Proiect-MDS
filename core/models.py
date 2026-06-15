@@ -3,9 +3,7 @@ from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
-# ==========================================
 # 1. MODELUL LISTING (Anunțul Imobiliar)
-# ==========================================
 class Listing(models.Model):
     # --- ENUMS (Liste de opțiuni predefinite) ---
     STATUS_CHOICES = [('PENDING', 'Așteaptă curățare'), ('PROCESSED', 'Curățat'), ('ERROR', 'Eroare')]
@@ -41,11 +39,11 @@ class Listing(models.Model):
     rental_period = models.CharField(max_length=50, null=True, blank=True)
     availability = models.CharField(max_length=100, null=True, blank=True)
     
-    # --- LOCAȚIE ---
+    # --- LOCATIE ---
     city = models.CharField(max_length=100, null=True, blank=True)
     neighborhood = models.CharField(max_length=100, null=True, blank=True) 
 
-    # === LOCAȚIE GPS (NOU) ===
+    # --- LOCATIE GPS (NOU) ---
     latitude = models.FloatField(null=True, blank=True, help_text="Latitudine extrasă din sursă")
     longitude = models.FloatField(null=True, blank=True, help_text="Longitudine extrasă din sursă")
 
@@ -64,7 +62,7 @@ class Listing(models.Model):
     building_structure = models.CharField(max_length=50, choices=STRUCTURE_CHOICES, null=True, blank=True)
     furnishing_state = models.CharField(max_length=50, choices=FURNISHED_CHOICES, null=True, blank=True)
 
-    # --- UTILITĂȚI ȘI CONTORIZARE ---
+    # --- UTILITATI SI CONTORIZARE ---
     heating_type = models.CharField(max_length=50, choices=HEATING_CHOICES, null=True, blank=True)
     has_underfloor_heating = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
     has_gas = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
@@ -94,7 +92,7 @@ class Listing(models.Model):
     has_hood = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
     has_ac = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
 
-    # --- FACILITĂȚI IMOBIL & EXTERIOR ---
+    # --- FACILITATI IMOBIL & EXTERIOR ---
     has_intercom = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
     has_elevator = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
     has_video_surveillance = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
@@ -104,7 +102,7 @@ class Listing(models.Model):
     street_lit = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
     near_public_transit = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
 
-    # --- DETALII TEHNICE ȘI JURIDICE ---
+    # --- DETALII TEHNICE ---
     energy_class = models.CharField(max_length=2, choices=ENERGY_CLASS_CHOICES, null=True, blank=True)
     vices = models.TextField(null=True, blank=True)
 
@@ -117,11 +115,9 @@ class Listing(models.Model):
         title_display = self.title if self.title else "Anunț neprocesat"
         return f"[{self.processing_status}] {self.source_website} - {title_display}"
 
-# ==========================================
-# 2. MODELUL REPORT (Creierul AI)
-# ==========================================
+# 2. MODELUL REPORT 
 class Report(models.Model):
-    # --- Relații ---
+    # --- Relaii ---
     listing = models.ForeignKey(Listing, on_delete=models.CASCADE, related_name='reports')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='my_reports')
     

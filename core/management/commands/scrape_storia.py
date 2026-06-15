@@ -13,9 +13,21 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 class Command(BaseCommand):
     help = 'Scraper rapid pentru Storia.ro (JSON-first, Parallel Tabs, Resource Blocking)'
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--city', type=str, default='toata-romania',
+            help='Slug-ul orașului pe Storia (ex: bucuresti, cluj-napoca, timisoara) sau "toata-romania" pentru toate'
+        )
+        parser.add_argument(
+            '--limit', type=int, default=40,
+            help='Numărul maxim de anunțuri de procesat per rulare (default: 40)'
+        )
+
     def handle(self, *args, **options):
         os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
-        self.stdout.write(self.style.WARNING(" Parser Storia.ro: Inițiere proces de scraping..."))
+        city_slug = options.get('city', 'toata-romania')
+        limit = options.get('limit', 40)
+        self.stdout.write(self.style.WARNING(f" Parser Storia.ro: Scraping '{city_slug}' (limită: {limit} anunțuri)..."))
 
         with Stealth().use_sync(sync_playwright()) as p:
             browser = p.chromium.launch(
@@ -40,7 +52,7 @@ class Command(BaseCommand):
             context.route("**/*facebook*", lambda route: route.abort())
 
             main_page = context.new_page()
-            url_cautare = "https://www.storia.ro/ro/rezultate/inchiriere/apartament/bucuresti"
+            url_cautare = f"https://www.storia.ro/ro/rezultate/inchiriere/apartament/{city_slug}"
 
             try:
                 self.stdout.write(f" Navigam spre: {url_cautare}")
@@ -98,7 +110,7 @@ class Command(BaseCommand):
                     return
 
                 # Limităm la 40 de anunțuri per rulare
-                linkuri_noi = linkuri_noi[:40]
+                linkuri_noi = linkuri_noi[:limit]
                 self.stdout.write(f" Procesăm {len(linkuri_noi)} anunțuri noi...")
 
                 # Procesare în batch-uri paralele de câte 3 tab-uri
@@ -264,12 +276,12 @@ class Command(BaseCommand):
 
             # Debug output
             self.stdout.write("\n" + "=" * 60)
-            self.stdout.write(f"🔗 URL: {url}")
-            self.stdout.write(f"📌 TITLU EXTRAS (JSON): {titlu}")
-            self.stdout.write(f"💰 PRET EXTRAS: {pret}")
-            self.stdout.write(self.style.WARNING(f"📍 LOCAȚIE EXTRASĂ: {locatie}"))
-            self.stdout.write(f"📝 DESCRIERE (primele 100 char): {descriere[:100]}...")
-            self.stdout.write(f"⚡ Sursa: __NEXT_DATA__ JSON (rapid)")
+            self.stdout.write(f"URL: {url}")
+            self.stdout.write(f"TITLU EXTRAS (JSON): {titlu}")
+            self.stdout.write(f"PRET EXTRAS: {pret}")
+            self.stdout.write(self.style.WARNING(f"LOCAȚIE EXTRASĂ: {locatie}"))
+            self.stdout.write(f"DESCRIERE (primele 100 char): {descriere[:100]}...")
+            self.stdout.write(f"Sursa: __NEXT_DATA__ JSON (rapid)")
             self.stdout.write("=" * 60 + "\n")
 
             # Salvare
@@ -339,19 +351,34 @@ class Command(BaseCommand):
             pret = pret_el.inner_text().strip()
 
         locatie = page.evaluate("""function() {
+            // Strategia 1: Breadcrumb-uri Storia (link-uri cu /rezultate/ în href)
+            var breadcrumbs = document.querySelectorAll('a[href*="/rezultate/"]');
+            var parts = [];
+            for(var i=0; i<breadcrumbs.length; i++) {
+                var text = breadcrumbs[i].innerText.trim();
+                if(text.length > 2 && text.length < 80) {
+                    parts.push(text);
+                }
+            }
+            if(parts.length > 0) {
+                return parts.join(', ');
+            }
+            // Strategia 2: Căutăm orice link cu text de locație
             var links = document.querySelectorAll('a');
             for(var i=0; i<links.length; i++) {
-                if(links[i].innerText.includes('Bucuresti') || links[i].innerText.includes('Sector')) {
-                    return links[i].innerText.trim();
+                var href = links[i].getAttribute('href') || '';
+                var text = links[i].innerText.trim();
+                if(href.includes('/rezultate/') && text.length > 2 && text.length < 80) {
+                    return text;
                 }
             }
             return 'N/A';
         }""")
 
-        for linie in locatie.split('\n'):
-            if 'Bucuresti' in linie or 'Sector' in linie:
-                locatie = linie.strip()
-                break
+        # Curățăm locația de linii goale
+        if locatie and '\n' in locatie:
+            linii = [l.strip() for l in locatie.split('\n') if l.strip()]
+            locatie = ', '.join(linii) if linii else 'N/A'
 
         specs_brute = page.evaluate("""function() {
             var container = document.querySelector('[data-testid="ad-details"]') || 
@@ -373,7 +400,7 @@ class Command(BaseCommand):
                 
                 for(var i=0; i<linii.length; i++) {
                     var linie = linii[i].trim();
-                    if(linie.length > 1 && linie.length < 80) {
+                    if(linie.length > 0 && linie.length < 80) {
                         texte_valide.push(linie);
                     }
                 }
@@ -421,12 +448,12 @@ class Command(BaseCommand):
 
         # Debug
         self.stdout.write("\n" + "=" * 60)
-        self.stdout.write(f"🔗 URL: {url}")
-        self.stdout.write(f"📌 TITLU EXTRAS (DOM): {titlu}")
-        self.stdout.write(f"💰 PRET EXTRAS: {pret}")
-        self.stdout.write(self.style.WARNING(f"📍 LOCAȚIE EXTRASĂ (BRUT): {locatie}"))
-        self.stdout.write(f"📝 DESCRIERE (primele 100 char): {descriere[:100]}...")
-        self.stdout.write(f"🐢 Sursa: DOM fallback (mai lent)")
+        self.stdout.write(f"URL: {url}")
+        self.stdout.write(f"TITLU EXTRAS (DOM): {titlu}")
+        self.stdout.write(f"PRET EXTRAS: {pret}")
+        self.stdout.write(self.style.WARNING(f"LOCAȚIE EXTRASĂ (BRUT): {locatie}"))
+        self.stdout.write(f"DESCRIERE (primele 100 char): {descriere[:100]}...")
+        self.stdout.write(f"Sursa: DOM fallback (mai lent)")
         self.stdout.write("=" * 60 + "\n")
 
         # Salvare

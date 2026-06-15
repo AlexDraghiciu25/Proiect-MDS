@@ -198,7 +198,7 @@
             <h3 class="property-title">{{ anunt.title|truncatechars:40 }}</h3>
             <p class="property-address">
                 <i class="bi bi-geo-alt me-1"></i>
-                {{ anunt.city|default:"București" }}{% if anunt.neighborhood %}, {{ anunt.neighborhood }}{% endif %}
+                {{ anunt.city|default:"Oraș nespecificat" }}{% if anunt.neighborhood %}, {{ anunt.neighborhood }}{% endif %}
             </p>
             
             <div class="property-features">

@@ -143,8 +143,14 @@ class Command(BaseCommand):
                 camere_curat = 2 
 
             bai_curat = extrage_numar_sau_standard(['baie', 'bai', 'grup sanitar'])
+            if bai_curat is None:
+                bai_curat = 1
+                
             balcoane_curat = extrage_numar_sau_standard(['balcon', 'balcoane', 'terasa', 'terase'], is_balcon=True)
+            
             bucatarii_curat = extrage_numar_sau_standard(['bucatarie', 'bucatarii'])
+            if bucatarii_curat is None:
+                bucatarii_curat = 1
 
             suprafata_curata = None
             match_suprafata = re.search(r'(?:suprafata utila|suprafata)[\s:\-]*(?:de\s+)?(\d+)\s*(?:mp|m2|m²|m|metri)', text_total)            
@@ -201,26 +207,109 @@ class Command(BaseCommand):
             if match_energy:
                 energy_class = match_energy.group(1).upper()
 
-            # --- EXTRAGERE LOCAȚIE (RECUPERATĂ!) ---
+            # --- EXTRAGERE LOCAȚIE — STRATEGIE ÎN 3 NIVELURI ---
+
+            # Lista completă a municipiilor din România + suburbii comune
+            # Cheie = formă fără diacritice (lowercase), Valoare = formă corectă
+            MUNICIPII_RO = {
+                'alba iulia': 'Alba Iulia', 'arad': 'Arad', 'pitesti': 'Pitești',
+                'bacau': 'Bacău', 'oradea': 'Oradea', 'bistrita': 'Bistrița',
+                'botosani': 'Botoșani', 'brasov': 'Brașov', 'braila': 'Brăila',
+                'buzau': 'Buzău', 'resita': 'Reșița', 'cluj-napoca': 'Cluj-Napoca',
+                'cluj napoca': 'Cluj-Napoca', 'cluj': 'Cluj-Napoca',
+                'constanta': 'Constanța', 'sfantu gheorghe': 'Sfântu Gheorghe',
+                'targoviste': 'Târgoviște', 'craiova': 'Craiova',
+                'drobeta-turnu severin': 'Drobeta-Turnu Severin',
+                'galati': 'Galați', 'giurgiu': 'Giurgiu', 'targu jiu': 'Târgu Jiu',
+                'miercurea ciuc': 'Miercurea Ciuc', 'deva': 'Deva',
+                'slobozia': 'Slobozia', 'iasi': 'Iași', 'baia mare': 'Baia Mare',
+                'targu mures': 'Târgu Mureș', 'targu-mures': 'Târgu Mureș',
+                'piatra neamt': 'Piatra Neamț', 'piatra-neamt': 'Piatra Neamț',
+                'slatina': 'Slatina', 'ploiesti': 'Ploiești', 'satu mare': 'Satu Mare',
+                'zalau': 'Zalău', 'sibiu': 'Sibiu', 'suceava': 'Suceava',
+                'alexandria': 'Alexandria', 'timisoara': 'Timișoara', 'timis': 'Timișoara',
+                'tulcea': 'Tulcea', 'vaslui': 'Vaslui',
+                'ramnicu valcea': 'Râmnicu Vâlcea', 'ramnicu-valcea': 'Râmnicu Vâlcea',
+                'rm valcea': 'Râmnicu Vâlcea', 'focsani': 'Focșani',
+                'bucuresti': 'București', 'bucharest': 'București',
+                'medias': 'Mediaș', 'sebes': 'Sebeș', 'turda': 'Turda',
+                'campina': 'Câmpina', 'fagaras': 'Făgăraș',
+                'hunedoara': 'Hunedoara', 'petrosani': 'Petroșani',
+                'roman': 'Roman', 'falticeni': 'Fălticeni',
+                'pascani': 'Pașcani', 'mangalia': 'Mangalia',
+                'medgidia': 'Medgidia', 'calarasi': 'Călărași',
+                'lugoj': 'Lugoj', 'ilfov': 'Ilfov',
+                'voluntari': 'Voluntari', 'pantelimon': 'Pantelimon',
+                'popesti-leordeni': 'Popești-Leordeni', 'popesti leordeni': 'Popești-Leordeni',
+                'bragadiru': 'Bragadiru', 'otopeni': 'Otopeni',
+                'buftea': 'Buftea', 'chiajna': 'Chiajna',
+                'magurele': 'Măgurele', 'chitila': 'Chitila',
+                'floresti': 'Florești', 'baciu': 'Baciu', 'apahida': 'Apahida',
+            }
+
             oras_curat = None
             zona_curata = None
-            loc_brut = str(raw.get("site_location", ""))
-            
-            if loc_brut and loc_brut.lower() != "n/a":
-                # Sparge pe virgulă (ex: "Nicolae Caramfil, Aviatiei, Sectorul 1, Bucuresti")
-                parti = [p.strip() for p in loc_brut.split(',')]
-                
-                # Caută București
-                for p in parti:
-                    if 'bucuresti' in strip_accents(p.lower()):
-                        oras_curat = "Bucuresti"
-                
-                # Elimină București și România pentru a lăsa doar strada/cartierul/sectorul
-                parti_utile = [p for p in parti if 'bucuresti' not in strip_accents(p.lower()) and 'romania' not in strip_accents(p.lower())]
-                
-                if len(parti_utile) > 0:
-                    # Unește ultimele 2 informații (de obicei Cartier + Sector)
-                    zona_curata = ", ".join(parti_utile[-2:])
+
+            # === NIVEL 1: Câmpuri curate salvate direct de JSON scraper (cel mai fiabil) ===
+            site_city = str(raw.get("site_city", "") or "").strip()
+            site_district = str(raw.get("site_district", "") or "").strip()
+
+            if site_city:
+                city_clean = strip_accents(site_city.lower()).strip()
+                # Normalizăm diacriticele dacă știm orașul, altfel păstrăm ce a venit din JSON
+                oras_curat = MUNICIPII_RO.get(city_clean, site_city)
+                zona_curata = site_district if site_district else None
+
+            # === NIVEL 2: Parsare din `site_specs` (foarte curat) ===
+            if not oras_curat:
+                specs_brut = str(raw.get("site_specs", "") or "")
+                if specs_brut:
+                    # site_specs are forma: "... | 550 € | Carol I, Iasi, Iasi | Apartament..."
+                    specs_parts = [p.strip() for p in specs_brut.split('|')]
+                    for part in specs_parts:
+                        sub_parts = [s.strip() for s in part.split(',')]
+                        # Căutăm fragmente care conțin orașul
+                        oras_index = -1
+                        for i, s in enumerate(sub_parts):
+                            s_clean = strip_accents(s.lower()).strip()
+                            if s_clean in MUNICIPII_RO:
+                                oras_curat = MUNICIPII_RO[s_clean]
+                                oras_index = i
+                                break  # ne oprim la primul oraș găsit în acest fragment
+                        
+                        if oras_index >= 0:
+                            # Ce e înainte de oraș e cartierul (ex: "Carol I")
+                            parti_inainte = sub_parts[:oras_index]
+                            if parti_inainte:
+                                zona_curata = ", ".join(parti_inainte[-2:])
+                            break
+                            
+            # === NIVEL 3: Parsare string site_location (fallback extrem) ===
+            if not oras_curat:
+                loc_brut = str(raw.get("site_location", "") or "")
+                if loc_brut and loc_brut.lower() != "n/a":
+                    # Luăm ultimele 15 elemente pentru a evita fragmentele gigantice din DOM fallback
+                    parti_toate = [p.strip() for p in loc_brut.split(',')]
+                    parti = parti_toate[-15:]
+
+                    # Scanăm de la coadă spre început (orașul e de obicei spre final)
+                    BLACKLIST_NAV = {'inchiri', 'apartam', 'garsonier', 'camere',
+                                     'terenuri', 'spatii', 'birouri', 'hale', 'garaje',
+                                     'case noi', 'apartamente noi', 'camere de inchiriat'}
+                    for i in range(len(parti) - 1, -1, -1):
+                        p_clean = strip_accents(parti[i].lower()).strip()
+                        if p_clean in MUNICIPII_RO:
+                            oras_curat = MUNICIPII_RO[p_clean]
+                            parti_inainte = parti[:i]
+                            # Filtrăm resturi de navigare
+                            parti_utile = [
+                                p for p in parti_inainte
+                                if 2 < len(p) < 50
+                                and not any(b in strip_accents(p.lower()) for b in BLACKLIST_NAV)
+                            ]
+                            if parti_utile:
+                                zona_curata = ", ".join(parti_utile[-2:])
+                            break
 
             
             def extrage_reguli_vicii(text):

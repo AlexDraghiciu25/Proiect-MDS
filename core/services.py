@@ -384,7 +384,7 @@ class DetectiveAgent:
             poi_data = f"Sistemul GPS a eșuat să găsească adresa exactă. Ignoră complet această eroare tehnică! Te rog să analizezi zona '{listing.neighborhood}, {listing.city}' bazându-te exclusiv pe cunoștințele tale generale. Scrie un paragraf atractiv despre cum este viața în acest cartier (puncte de interes generale, nivel de trai, transport în comun, parcuri cunoscute). Fii util și NU menționa sub nicio formă în raport că îți lipsesc datele sau coordonatele!"
 
         t_poi = time.time()
-        print(f"[⏱] POI fetch: {t_poi - t_coords:.1f}s")
+        print(f" POI fetch: {t_poi - t_coords:.1f}s")
 
         # ── FAZA 2: Gemini + Distance Verification IN PARALEL ──
         # Gemini primește datele de listing + POI (fără distance verification)
@@ -392,39 +392,39 @@ class DetectiveAgent:
         # Penalizările pentru distanțe exagerate se aplică PROGRAMATIC după
 
         prompt = f"""Ești un consultant imobiliar senior din România, specializat în analiza de piață.
-Analizează acest anunț pornind de la un Index de Încredere de bază de {scor_baza}%.
+            Analizează acest anunț pornind de la un Index de Încredere de bază de {scor_baza}%.
 
-DATE ANUNȚ:
-Locație: {listing.city}, {listing.neighborhood}
-Titlu: {listing.title}
-Preț: {listing.price} {listing.currency}
-Descriere: {listing.description}
-Specificații tehnice: {listing.raw_data.get('site_specs', 'N/A')}
+            DATE ANUNȚ:
+            Locație: {listing.city}, {listing.neighborhood}
+            Titlu: {listing.title}
+            Preț: {listing.price} {listing.currency}
+            Descriere: {listing.description}
+            Specificații tehnice: {listing.raw_data.get('site_specs', 'N/A')}
 
-Puncte de interes identificate de Maps Agent în zonă (Rază 1km):
-{poi_data}
+            Puncte de interes identificate de Maps Agent în zonă (Rază 1km):
+            {poi_data}
 
-INSTRUCȚIUNI:
-1. Scorul final trebuie să reflecte acuratețea și completitudinea datelor.
-2. Dacă scorul final este sub 90%, incluzi în "flags" motivele.
-3. NU scădea puncte pentru lipsa contactului telefonic.
-4. Scade din scorul de {scor_baza}% DOAR dacă identifici contradicții sau preț suspect.
-5. Dacă prețul este cu 10-20% sub medie, etichetează-l ca "Ofertă competitivă".
-6. Data curentă: {data_azi}. Ignoră eroarea "dată în viitor" pentru ziua de azi.
-7. Folosește POI pentru a redacta o recenzie utilă a zonei în "proximity". Incluzi distanțele EXACTE în metri (ex: "Stația de metrou X la 450m, Kaufland la 800m").
+            INSTRUCȚIUNI:
+            1. Scorul final trebuie să reflecte acuratețea și completitudinea datelor.
+            2. Dacă scorul final este sub 90%, incluzi în "flags" motivele.
+            3. NU scădea puncte pentru lipsa contactului telefonic.
+            4. Scade din scorul de {scor_baza}% DOAR dacă identifici contradicții , altfel afiseaza {listing.data_completeness_score}.
+            5. Dacă prețul este cu 10-20% sub medie, etichetează-l ca "Ofertă competitivă".
+            6. Data curentă: {data_azi}. Ignoră eroarea "dată în viitor" pentru ziua de azi.
+            7. Folosește POI pentru a redacta o recenzie utilă a zonei în "proximity". Incluzi distanțele EXACTE în metri (ex: "Stația de metrou X la 450m, Kaufland la 800m").
 
-Returnează DOAR un JSON valid:
-{{
-    "score": <int_scor_ajustat>,
-    "flags": ["listă_cu_riscuri_sau_lipsuri"],
-    "proximity": "Sinteză a vieții în zonă cu distanțe exacte...",
-    "price_analysis": {{
-        "average_zone_price": <int_valoare_medie_estimată_în_{listing.currency}>,
-        "difference_percentage": <int_procent>,
-        "label": "ex: Preț conform pieței"
-    }},
-    "verdict": "concluzie_echilibrată"
-}}"""
+            Returnează DOAR un JSON valid:
+            {{
+                "score": <int_scor_ajustat>,
+                "flags": ["listă_cu_riscuri_sau_lipsuri"],
+                "proximity": "Sinteză a vieții în zonă cu distanțe exacte...",
+                "price_analysis": {{
+                    "average_zone_price": <int_valoare_medie_estimată_în_{listing.currency}>,
+                    "difference_percentage": <int_procent>,
+                    "label": "ex: Preț conform pieței"
+                }},
+                "verdict": "concluzie_echilibrată"
+            }}"""
 
         gemini_result = [None]
         gemini_error = [None]
@@ -508,18 +508,18 @@ Returnează DOAR un JSON valid:
             elif verdict == "FALS / ÎNȘELĂTOR":
                 score_adjustment -= 15
                 data.setdefault('flags', []).append(
-                    f"⚠️ Distanța către {vc['destination']} e fals înșelătoare! (afirmat: {vc['claimed_minutes']}min, real: {vc['real_minutes']}min)"
+                    f"Distanța către {vc['destination']} e fals înșelătoare! (afirmat: {vc['claimed_minutes']}min, real: {vc['real_minutes']}min)"
                 )
             elif "PIN FALS" in verdict:
                 score_adjustment -= 25
                 data.setdefault('flags', []).append(
-                    f"🚨 PIN FALS PE HARTĂ: Agentul a plasat pinul GPS mai aproape de {vc['destination']} pentru a trișa căutările!"
+                    f"PIN FALS PE HARTĂ: Agentul a plasat pinul GPS mai aproape de {vc['destination']} pentru a trișa căutările!"
                 )
 
         final_score = max(0, min(100, data.get('score', scor_baza) + score_adjustment))
 
         t_end = time.time()
-        print(f"[⏱] TOTAL analyze_listing: {t_end - t_start:.1f}s (Gemini+Dist paralel: {t_parallel - t_poi:.1f}s, POI: {t_poi - t_coords:.1f}s)")
+        print(f" TOTAL analyze_listing: {t_end - t_start:.1f}s (Gemini+Dist paralel: {t_parallel - t_poi:.1f}s, POI: {t_poi - t_coords:.1f}s)")
 
         try:
             return Report.objects.create(
@@ -533,5 +533,5 @@ Returnează DOAR un JSON valid:
                 distance_verification=distance_verification_results
             )
         except Exception as e:
-            print(f"[-] Eroare la salvarea raportului: {e}")
+            print(f" Eroare la salvarea raportului: {e}")
             return None
