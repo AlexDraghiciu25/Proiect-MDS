@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.core.validators import MinValueValidator
 
 class Listing(models.Model):
     STATUS_CHOICES = [('PENDING', 'Așteaptă curățare'), ('PROCESSED', 'Curățat'), ('ERROR', 'Eroare')]
@@ -27,7 +28,7 @@ class Listing(models.Model):
 
     title = models.CharField(max_length=255, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
-    price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0.0)])
     currency = models.CharField(max_length=10, default='EUR')
     property_destination = models.CharField(max_length=50, null=True, blank=True)
     rental_period = models.CharField(max_length=50, null=True, blank=True)
