@@ -218,8 +218,9 @@ def run_analysis_view(request, listing_id):
         messages.error(request, "Analiza AI a eșuat. Verifică cheia API.")
         return redirect('home')
 
-<<<<<<< HEAD
-# core/views.py
+# ==========================================
+# 5. [UNIFICAT] ANALIZĂ DIRECTĂ PRIN URL MANUAL (DASHBOARD)
+# ==========================================
 
 def _run_analysis_background(task_id, url_extern, user_id):
     """
@@ -273,16 +274,10 @@ def _run_analysis_background(task_id, url_extern, user_id):
         _analysis_tasks[task_id]['error'] = str(e)
 
 
-=======
-# ==========================================
-# 5. [UNIFICAT] ANALIZĂ DIRECTĂ PRIN URL MANUAL (DASHBOARD)
-# ==========================================
->>>>>>> origin/main
 @login_required
 def analyze_external(request):
     if request.method == 'POST':
         url_extern = request.POST.get('external_url', '').strip()
-        url_lower = url_extern.lower()
         
         # Fast-path: dacă anunțul + raportul există deja, redirecționăm instant
         listing = Listing.objects.filter(source_url=url_extern).first()
@@ -291,7 +286,6 @@ def analyze_external(request):
             if report:
                 return redirect('result_detail', listing_id=listing.id)
         
-<<<<<<< HEAD
         # Generăm un task ID unic și pornim procesarea în background
         task_id = str(uuid.uuid4())
         _analysis_tasks[task_id] = {
@@ -341,84 +335,6 @@ def task_status_api(request, task_id):
         del _analysis_tasks[task_id]
     
     return JsonResponse(response_data)
-=======
-        # 2. Dacă NU există, executăm comanda de Django direct din cod
-        if not listing:
-            messages.info(request, "Anunț nou detectat. Pornim scanarea instatanee...")
-            try:
-                if "olx.ro" in url_lower:
-                    print("-> [RentGuru Engine] Rulăm comanda nativă de scraping pentru OLX...")
-                    scraper_olx = OlxScraper()
-                    # Dacă în handle ai logica directă, o apelăm direct cu URL ca parametru custom
-                    # Dacă scraperul tău vechi folosea o metodă internă, o poți lăsa pe aceea, 
-                    # dar handle() apelat direct e cel mai sigur:
-                    try:
-                        scraper_olx.proceseaza_anunt_olx(None, url_extern)
-                    except AttributeError:
-                        # Fallback dacă logica e direct în handle
-                        scraper_olx.handle(url=url_extern)
-                    
-                elif "storia.ro" in url_lower:
-                    if StoriaScraper:
-                        print("-> [RentGuru Engine] Rulăm comanda nativă de scraping pentru Storia...")
-                        scraper_storia = StoriaScraper()
-                        
-                        # Încercăm să apelăm handle direct sau metode alternative flexibile
-                        # pentru a nu mai crăpa indiferent de cum ai numit funcția în interior
-                        try:
-                            if hasattr(scraper_storia, 'proceseaza_anunt_storia'):
-                                scraper_storia.proceseaza_anunt_storia(None, url_extern)
-                            elif hasattr(scraper_storia, 'proceseaza_anunt_olx'):
-                                # Uneori rămâne denumirea de la OLX din cauza copy-paste-ului
-                                scraper_storia.proceseaza_anunt_olx(None, url_extern)
-                            else:
-                                # Dacă e scrisă direct în handle sau altă metodă generică
-                                scraper_storia.handle(url=url_extern)
-                        except Exception as e_inner:
-                            print(f"-> Încercare fallback direct prin handle: {e_inner}")
-                            # Execuție directă prin handle ca fail-safe suprem
-                            scraper_storia.handle(url=url_extern)
-                    else:
-                        messages.error(request, "Modulul de scraping pentru Storia nu este configurat.")
-                        return redirect('home')
-                else:
-                    messages.error(request, "RentGuru acceptă doar link-uri valide de pe OLX.ro sau Storia.ro.")
-                    return redirect('home')
-
-                # Re-extragem din DB anunțul proaspăt descărcat de scraper
-                listing = Listing.objects.filter(source_url=url_extern).first()
-
-            except Exception as e_scrape:
-                print(f"❌ [Scrape Error] Eșec la descărcarea instantă: {e_scrape}")
-                messages.error(request, "Nu s-a putut descărca anunțul. Asigură-te că link-ul este activ.")
-                return redirect('home')
-
-        if not listing:
-            messages.error(request, "Scraper-ul nu a putut salva datele anunțului în baza de date.")
-            return redirect('home')
-
-        # 3. FLUXUL HIBRID UNIC: Rulăm imediat și AI-ul în aceeași încărcare!
-        report = Report.objects.filter(listing=listing).first()
-        
-        if not report:
-            listing.refresh_from_db()
-            messages.info(request, "Generăm raportul AI...")
-            try:
-                agent = DetectiveAgent()
-                report = agent.analyze_listing(listing.id, request.user)
-                
-                if not report:
-                    messages.error(request, "AI-ul a extras datele brute dar nu a putut compila raportul.")
-                    return redirect('home')
-            except Exception as e_ai:
-                print(f"❌ [Gemini Error] Analiza directă a eșuat:\n{e_ai}")
-                messages.error(request, f"Eroare la procesarea AI instantanee: {e_ai}")
-                return redirect('home')
-
-        # Redirecționăm direct către raport dintr-o singură mișcare!
-        return redirect('result_detail', listing_id=listing.id)
-        
-    return redirect('home')
 
 # ==========================================
 # 6. UNIVERSAL AI CHAT ASSISTANT
@@ -534,11 +450,11 @@ def ai_chat_endpoint(request):
             opinie_ai = response.text
         except Exception as e_api:
             print(f"Eroare GenAI API: {e_api}")
-            opinie_ai = f"🤖 Asistentul RentGuru întâmpină probleme tehnice. Detalii: {str(e_api)[:100]}"
+            opinie_ai = f" Asistentul RentGuru întâmpină probleme tehnice. Detalii: {str(e_api)[:100]}"
 
         if are_anunturi:
             reply_final = (
-                f"📊 <strong>Analiză Personalizată RentGuru AI pentru proprietățile selectate:</strong><br>"
+                f" <strong>Analiză Personalizată RentGuru AI pentru proprietățile selectate:</strong><br>"
                 f"{tabel_html}"
                 f"<div class='mt-3 border-top pt-2 text-dark' style='font-size: 0.85rem; line-height: 1.5;'>"
                 f"{opinie_ai}"
@@ -546,7 +462,7 @@ def ai_chat_endpoint(request):
             )
         else:
             reply_final = (
-                f"🤖 <strong>RentGuru AI Consultant Imobiliar:</strong><br>"
+                f" <strong>RentGuru AI Consultant Imobiliar:</strong><br>"
                 f"<div class='mt-2 text-dark' style='font-size: 0.85rem; line-height: 1.5;'>"
                 f"{opinie_ai}"
                 f"</div>"
@@ -555,5 +471,4 @@ def ai_chat_endpoint(request):
         return JsonResponse({"reply": reply_final})
 
     except Exception as e:
-        return JsonResponse({"reply": f"❌ Eroare la procesarea chatului: {str(e)}"}, status=400)
->>>>>>> origin/main
+        return JsonResponse({"reply": f" Eroare la procesarea chatului: {str(e)}"}, status=400)
