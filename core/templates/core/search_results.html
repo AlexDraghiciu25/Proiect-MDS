@@ -197,7 +197,6 @@
                 <div class="col-md-6 col-lg-4">
                     <div class="property-card h-100 d-flex flex-column">
 
-<<<<<<< HEAD
         <div class="property-info">
             <h3 class="property-title">{{ anunt.title|truncatechars:40 }}</h3>
             <p class="property-address">
@@ -238,17 +237,6 @@
     <a href="{% url 'home' %}" class="btn btn-outline-secondary">Înapoi la Dashboard</a>
 </div>
 {% endfor %}
-=======
-                        <div class="property-img-wrapper position-relative" style="height: 220px; overflow: hidden;">
-                            
-                            <div class="position-absolute top-0 end-0 m-2" style="z-index: 30;">
-                                <input type="checkbox" class="btn-check compare-checkbox" id="compare-check-{{ anunt.id }}" data-id="{{ anunt.id }}" data-title="{{ anunt.title|truncatechars:25 }}" autocomplete="off">
-                                <label class="btn btn-sm rounded-pill shadow-sm d-flex align-items-center gap-1 py-1 px-2.5" for="compare-check-{{ anunt.id }}" 
-                                    style="background: rgba(255, 255, 255, 0.95); border: 1px solid #dee2e6; color: #495057; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                                    <i class="bi bi-plus-circle compare-icon"></i> <span>Compară</span>
-                                </label>
-                            </div>
->>>>>>> origin/main
 
                             {% if anunt.raw_data.site_images %}
                                 <div id="carousel-{{ anunt.id }}" class="carousel slide h-100" data-bs-ride="false"><div class="carousel-indicators mb-2">
