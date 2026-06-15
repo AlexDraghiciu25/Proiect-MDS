@@ -20,16 +20,14 @@ from google import genai
 from django.conf import settings
 import requests
 
-# Importăm ambele comenzi de scraping pentru a le putea rula instant la cerere manuală
+# Importăm comenzile native de scraping aduse de Rareș de pe main
 from core.management.commands.scrape_olx import Command as OlxScraper
-# Ajustează calea de mai jos dacă fișierul tău de Storia are altă denumire sau locație
 try:
     from core.management.commands.scrape_storia import Command as StoriaScraper
 except ImportError:
     StoriaScraper = None
 
 # Task tracker pentru procesarea asincronă
-# Format: {task_id: {'status': 'processing'|'done'|'error', 'listing_id': int|None, 'error': str|None, 'step': str}}
 _analysis_tasks = {}
 
 # ==========================================
@@ -84,7 +82,6 @@ def history(request):
     rapoarte_list = Report.objects.filter(user=request.user).select_related('listing').order_by('-generated_at')
     
     paginator = Paginator(rapoarte_list, 6) 
-    
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     
@@ -219,41 +216,63 @@ def run_analysis_view(request, listing_id):
         return redirect('home')
 
 # ==========================================
-# 5. [UNIFICAT] ANALIZĂ DIRECTĂ PRIN URL MANUAL (DASHBOARD)
+# 5. ASINCRON: URMARIRE TASK-URI & ANALIZA URL MANUAL
 # ==========================================
-
 def _run_analysis_background(task_id, url_extern, user_id):
     """
-    Worker care rulează în background thread:
-    scraping → normalizare → analiză AI.
-    Actualizează _analysis_tasks cu statusul curent.
+    Worker fundal hibrid: Pornește asincron, apelează motoarele robuste 
+    de scraping (Storia/OLX) și finalizează cu DetectiveAgent.
     """
     from django.contrib.auth.models import User
+    url_lower = url_extern.lower()
     
     try:
-        # Pasul 1: Verificare dacă există deja
+        # Pasul 1: Verificare DB local
         _analysis_tasks[task_id]['step'] = 'Verificăm baza de date...'
         listing = Listing.objects.filter(source_url=url_extern).first()
         
-        # Pasul 2: Scraping + Normalizare
+        # Pasul 2: Scraping dinamic de înaltă fidelitate în paralel dacă e nou
         if not listing:
-            _analysis_tasks[task_id]['step'] = 'Scanăm anunțul...'
-            listing = scrape_single_url(url_extern)
+            _analysis_tasks[task_id]['step'] = 'Scanăm anunțul în timp real...'
             
-            if not listing:
-                _analysis_tasks[task_id]['status'] = 'error'
-                _analysis_tasks[task_id]['error'] = 'Scraper-ul nu a putut accesa link-ul.'
-                return
+            if "olx.ro" in url_lower:
+                scraper_olx = OlxScraper()
+                try:
+                    scraper_olx.proceseaza_anunt_olx(None, url_extern)
+                except AttributeError:
+                    scraper_olx.handle(url=url_extern)
+                    
+            elif "storia.ro" in url_lower:
+                if StoriaScraper:
+                    scraper_storia = StoriaScraper()
+                    try:
+                        if hasattr(scraper_storia, 'proceseaza_anunt_storia'):
+                            scraper_storia.proceseaza_anunt_storia(None, url_extern)
+                        elif hasattr(scraper_storia, 'proceseaza_anunt_olx'):
+                            scraper_storia.proceseaza_anunt_olx(None, url_extern)
+                        else:
+                            scraper_storia.handle(url=url_extern)
+                    except Exception:
+                        scraper_storia.handle(url=url_extern)
+            else:
+                listing = scrape_single_url(url_extern)
+
+            # Recuperează instanța salvată atomic de scripturile de management
+            listing = Listing.objects.filter(source_url=url_extern).first()
+
+        if not listing:
+            _analysis_tasks[task_id]['status'] = 'error'
+            _analysis_tasks[task_id]['error'] = 'Motorul de scraping nu a putut salva datele proprietății.'
+            return
 
         _analysis_tasks[task_id]['listing_id'] = listing.id
         
-        # Pasul 3: Verificare raport existent
+        # Pasul 3: Generare Raport Multi-Agent AI
         report = Report.objects.filter(listing=listing).first()
         
         if not report:
             listing.refresh_from_db()
-            
-            _analysis_tasks[task_id]['step'] = 'Analizăm datele cu AI...'
+            _analysis_tasks[task_id]['step'] = 'Generăm auditul lingvistic cu RentGuru AI...'
             
             user = User.objects.get(id=user_id)
             agent = DetectiveAgent()
@@ -261,7 +280,7 @@ def _run_analysis_background(task_id, url_extern, user_id):
             
             if not report:
                 _analysis_tasks[task_id]['status'] = 'error'
-                _analysis_tasks[task_id]['error'] = 'AI-ul a extras datele dar nu a putut genera concluzia.'
+                _analysis_tasks[task_id]['error'] = 'Modelul AI nu a putut genera rapoartele de integritate.'
                 return
         
         _analysis_tasks[task_id]['step'] = 'Finalizăm raportul...'
@@ -279,14 +298,12 @@ def analyze_external(request):
     if request.method == 'POST':
         url_extern = request.POST.get('external_url', '').strip()
         
-        # Fast-path: dacă anunțul + raportul există deja, redirecționăm instant
         listing = Listing.objects.filter(source_url=url_extern).first()
         if listing:
             report = Report.objects.filter(listing=listing).first()
             if report:
                 return redirect('result_detail', listing_id=listing.id)
         
-        # Generăm un task ID unic și pornim procesarea în background
         task_id = str(uuid.uuid4())
         _analysis_tasks[task_id] = {
             'status': 'processing',
@@ -301,22 +318,17 @@ def analyze_external(request):
             daemon=True
         )
         thread.start()
-        
-        # Redirecționăm INSTANT către pagina de loading
         return redirect(f'/loading/{task_id}/')
         
     return redirect('home')
 
 
 def loading_view(request, task_id):
-    """Pagina de loading cu animație — se actualizează automat via polling."""
     return render(request, 'core/loading.html', {'task_id': task_id})
 
 
 def task_status_api(request, task_id):
-    """API endpoint JSON polled de loading.html la fiecare 2 secunde."""
     task = _analysis_tasks.get(task_id)
-    
     if not task:
         return JsonResponse({'status': 'error', 'error': 'Task inexistent.'})
     
@@ -328,13 +340,13 @@ def task_status_api(request, task_id):
     
     if task['status'] == 'done' and task.get('listing_id'):
         response_data['redirect_url'] = f"/result/{task['listing_id']}/"
-        # Curățăm task-ul din memorie
         del _analysis_tasks[task_id]
     elif task['status'] == 'error':
-        # Curățăm și la eroare
-        del _analysis_tasks[task_id]
+        if task_id in _analysis_tasks:
+            del _analysis_tasks[task_id]
     
     return JsonResponse(response_data)
+
 
 # ==========================================
 # 6. UNIVERSAL AI CHAT ASSISTANT
@@ -450,11 +462,11 @@ def ai_chat_endpoint(request):
             opinie_ai = response.text
         except Exception as e_api:
             print(f"Eroare GenAI API: {e_api}")
-            opinie_ai = f" Asistentul RentGuru întâmpină probleme tehnice. Detalii: {str(e_api)[:100]}"
+            opinie_ai = f"🤖 Asistentul RentGuru întâmpină probleme tehnice. Detalii: {str(e_api)[:100]}"
 
         if are_anunturi:
             reply_final = (
-                f" <strong>Analiză Personalizată RentGuru AI pentru proprietățile selectate:</strong><br>"
+                f"📊 <strong>Analiză Personalizată RentGuru AI pentru proprietățile selectate:</strong><br>"
                 f"{tabel_html}"
                 f"<div class='mt-3 border-top pt-2 text-dark' style='font-size: 0.85rem; line-height: 1.5;'>"
                 f"{opinie_ai}"
@@ -462,7 +474,7 @@ def ai_chat_endpoint(request):
             )
         else:
             reply_final = (
-                f" <strong>RentGuru AI Consultant Imobiliar:</strong><br>"
+                f"🤖 <strong>RentGuru AI Consultant Imobiliar:</strong><br>"
                 f"<div class='mt-2 text-dark' style='font-size: 0.85rem; line-height: 1.5;'>"
                 f"{opinie_ai}"
                 f"</div>"
@@ -471,4 +483,4 @@ def ai_chat_endpoint(request):
         return JsonResponse({"reply": reply_final})
 
     except Exception as e:
-        return JsonResponse({"reply": f" Eroare la procesarea chatului: {str(e)}"}, status=400)
+        return JsonResponse({"reply": f"❌ Eroare la procesarea chatului: {str(e)}"}, status=400)
