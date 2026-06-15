@@ -4,7 +4,9 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.core.validators import MinValueValidator
 
+# 1. MODELUL LISTING (Anunțul Imobiliar)
 class Listing(models.Model):
+    # --- ENUMS (Liste de opțiuni predefinite) ---
     STATUS_CHOICES = [('PENDING', 'Așteaptă curățare'), ('PROCESSED', 'Curățat'), ('ERROR', 'Eroare')]
     PARTITIONING_CHOICES = [('decomandat', 'Decomandat'), ('semidecomandat', 'Semidecomandat'), ('nedecomandat', 'Nedecomandat'), ('circular', 'Circular')]
     HEATING_CHOICES = [('centrala_proprie', 'Centrală proprie'), ('centrala_imobil', 'Centrală imobil/bloc'), ('termoficare', 'Termoficare (Radet)'), ('incalzire_electrica', 'Încălzire electrică'), ('calorifere', 'Calorifere')]
@@ -14,18 +16,22 @@ class Listing(models.Model):
     STRUCTURE_CHOICES = [('beton', 'Beton'), ('caramida', 'Cărămidă'), ('bca', 'BCA'), ('lemn', 'Lemn')]
     ENERGY_CLASS_CHOICES = [('A', 'Clasa A'), ('B', 'Clasa B'), ('C', 'Clasa C'), ('D', 'Clasa D'), ('E', 'Clasa E'), ('F', 'Clasa F'), ('G', 'Clasa G')]
 
+    # --- DEFINIREA STĂRILOR PENTRU BOOLEENE ---
     STARI_DOTARI = (
         (True, 'Da'),
         (False, 'Nu'),
         (None, 'Nemenționat (NULL)'),
     )
 
+    # --- IDENTIFICATORI ---
     source_url = models.URLField(max_length=500, unique=True)
     source_website = models.CharField(max_length=50, default='Necunoscut')
 
+    # --- ZONA TAMPON (JSON Data Lake) ---
     raw_data = models.JSONField(default=dict, blank=True, null=True)
     processing_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
 
+    # --- DATE GENERALE ---
     title = models.CharField(max_length=255, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0.0)])
@@ -34,11 +40,11 @@ class Listing(models.Model):
     rental_period = models.CharField(max_length=50, null=True, blank=True)
     availability = models.CharField(max_length=100, null=True, blank=True)
     
-    # --- LOCAȚIE ---
+    # --- LOCATIE ---
     city = models.CharField(max_length=100, null=True, blank=True)
     neighborhood = models.CharField(max_length=100, null=True, blank=True) 
 
-    # === LOCAȚIE GPS (NOU) ===
+    # --- LOCATIE GPS (NOU) ---
     latitude = models.FloatField(null=True, blank=True, help_text="Latitudine extrasă din sursă")
     longitude = models.FloatField(null=True, blank=True, help_text="Longitudine extrasă din sursă")
 
@@ -57,7 +63,7 @@ class Listing(models.Model):
     building_structure = models.CharField(max_length=50, choices=STRUCTURE_CHOICES, null=True, blank=True)
     furnishing_state = models.CharField(max_length=50, choices=FURNISHED_CHOICES, null=True, blank=True)
 
-    # --- UTILITĂȚI ȘI CONTORIZARE ---
+    # --- UTILITATI SI CONTORIZARE ---
     heating_type = models.CharField(max_length=50, choices=HEATING_CHOICES, null=True, blank=True)
     has_underfloor_heating = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
     has_gas = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
@@ -87,7 +93,7 @@ class Listing(models.Model):
     has_hood = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
     has_ac = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
 
-    # --- FACILITĂȚI IMOBIL & EXTERIOR ---
+    # --- FACILITATI IMOBIL & EXTERIOR ---
     has_intercom = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
     has_elevator = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
     has_video_surveillance = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
@@ -97,7 +103,7 @@ class Listing(models.Model):
     street_lit = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
     near_public_transit = models.BooleanField(null=True, blank=True, choices=STARI_DOTARI, default=None)
 
-    # --- DETALII TEHNICE ȘI JURIDICE ---
+    # --- DETALII TEHNICE ---
     energy_class = models.CharField(max_length=2, choices=ENERGY_CLASS_CHOICES, null=True, blank=True)
     vices = models.TextField(null=True, blank=True)
 
@@ -110,11 +116,9 @@ class Listing(models.Model):
         title_display = self.title if self.title else "Anunț neprocesat"
         return f"[{self.processing_status}] {self.source_website} - {title_display}"
 
-# ==========================================
-# 2. MODELUL REPORT (Creierul AI)
-# ==========================================
+# 2. MODELUL REPORT 
 class Report(models.Model):
-    # --- Relații ---
+    # --- Relaii ---
     listing = models.ForeignKey(Listing, on_delete=models.CASCADE, related_name='reports')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='my_reports')
     
@@ -141,6 +145,7 @@ class Report(models.Model):
             user = instance.user
             max_reports = 60
             
+            # Importăm modelul aici, în interiorul funcției, pentru a evita "circular import"
             from .models import Report 
             
             old_reports_ids = Report.objects.filter(user=user) \
