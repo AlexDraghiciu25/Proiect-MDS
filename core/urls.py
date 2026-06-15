@@ -16,8 +16,9 @@ urlpatterns = [
     path('loading/<str:task_id>/', views.loading_view, name='loading'),
     path('api/task-status/<str:task_id>/', views.task_status_api, name='task_status_api'),
     path('search_results/', views.search_results, name='search_results'),
-path('reset_password/', auth_views.PasswordResetView.as_view(template_name='core/registration/password_reset_form.html'), name='reset_password'),
-path('reset_password_sent/', auth_views.PasswordResetDoneView.as_view(template_name='core/registration/password_reset_done.html'), name='password_reset_done'),
-path('reset/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(template_name='core/registration/password_reset_confirm.html'), name='password_reset_confirm'),
-path('reset_password_complete/', auth_views.PasswordResetCompleteView.as_view(template_name='core/registration/password_reset_complete.html'), name='password_reset_complete'),
+    path('reset_password/', auth_views.PasswordResetView.as_view(template_name='core/registration/password_reset_form.html'), name='reset_password'),
+    path('reset_password_sent/', auth_views.PasswordResetDoneView.as_view(template_name='core/registration/password_reset_done.html'), name='password_reset_done'),
+    path('reset/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(template_name='core/registration/password_reset_confirm.html'), name='password_reset_confirm'),
+    path('reset_password_complete/', auth_views.PasswordResetCompleteView.as_view(template_name='core/registration/password_reset_complete.html'), name='password_reset_complete'),
+    path('ai-chat/', views.ai_chat_endpoint, name='ai_chat_endpoint'),
 ]

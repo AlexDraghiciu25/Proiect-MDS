@@ -134,8 +134,6 @@ body {
 
 .ai-badge {
     position: absolute;
-    top: 15px;
-    left: 15px;
     background-color: rgba(255,255,255,0.95);
     padding: 6px 12px;
     border-radius: 20px;
@@ -290,4 +288,32 @@ body {
 
 .custom-check:hover input[type="checkbox"] {
     border-color: var(--mds-green);
+}
+
+.btn-sursa-olx {
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.2s;
+    background-color: #f2f4f5;
+    color: #002f34;
+    border: 1px solid #002f34;
+}
+
+.btn-sursa-olx:hover {
+    background-color: #002f34;
+    color: #23e5db;
+}
+
+.btn-sursa-storia {
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.2s;
+    background-color: #e6f7ed;
+    color: #138a43;
+    border: 1px solid #138a43;
+}
+
+.btn-sursa-storia:hover {
+    background-color: #138a43;
+    color: white;
 }

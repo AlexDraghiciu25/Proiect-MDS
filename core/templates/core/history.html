@@ -85,8 +85,24 @@
                         <div class="history-details">
                             {# Afișăm data generării raportului #}
                             <span class="history-date">{{ raport.generated_at|date:"d F Y • H:i" }}</span>
-                            <h4 class="history-property">{{ raport.listing.title|truncatechars:50 }}</h4>
-                            <p class="history-address">
+                            <h4 class="history-property" style="margin-bottom: 2px;">{{ raport.listing.title|truncatechars:50 }}</h4>
+                            
+                            <!-- ==================================================== -->
+                            <!-- 🔗 LINK DINAMIC CĂTRE SURSA ORIGINALĂ (OLX / STORIA) -->
+                            <!-- ==================================================== -->
+                            <div class="mb-1">
+                                {% if raport.listing.source_url %}
+                                    <a href="{{ raport.listing.source_url }}" target="_blank" rel="noopener noreferrer" class="text-decoration-none d-inline-flex align-items-center gap-1 small fw-medium" style="color: var(--mds-brown, #8b5e3c); font-size: 0.82rem;">
+                                        <i class="bi bi-box-arrow-up-right" style="font-size: 0.75rem;"></i>
+                                        Sursă originală: {% if raport.listing.source_website == "OLX.ro" %}OLX.ro{% else %}Storia.ro{% endif %}
+                                    </a>
+                                {% else %}
+                                    <span class="text-muted small" style="font-size: 0.82rem;"><i class="bi bi-link-45deg"></i> Sursă indisponibilă</span>
+                                {% endif %}
+                            </div>
+                            <!-- ==================================================== -->
+
+                            <p class="history-address m-0">
                                 <i class="bi bi-geo-alt me-1"></i>
                                 {{ raport.listing.city|default:"București" }}{% if raport.listing.neighborhood %}, {{ raport.listing.neighborhood }}{% endif %}
                             </p>
