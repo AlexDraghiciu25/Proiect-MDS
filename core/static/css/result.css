@@ -325,3 +325,162 @@ body {
     border-top: 1px solid rgba(92, 64, 51, 0.1) !important;
     padding-top: 10px !important;
 }
+
+/* =========================================
+   RENTGURU PREMIUM - CLAUDE AESTHETIC
+   ========================================= */
+
+:root {
+    --bg-slate-50: #f8fafc;
+    --card-white: #ffffff;
+    --text-main: #0f172a; /* Slate 900 - Pentru titluri */
+    --text-muted: #475569; /* Slate 600 - Pentru paragraf */
+    --border-light: #e2e8f0; /* Slate 200 */
+    --brand-brown: #8b5e3c;
+}
+
+body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif !important;
+    background-color: var(--bg-slate-50) !important;
+    color: var(--text-muted) !important;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased; /* Face textul mai fin pe monitoare */
+}
+
+/* --- TITLURI ȘI HEADER --- */
+h1, h2, h3, h4, h5, .property-title {
+    color: var(--text-main) !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.02em !important;
+    margin-bottom: 0.5rem;
+}
+
+.property-title {
+    font-size: 1.75rem !important;
+    line-height: 1.3 !important;
+}
+
+/* Navigarea curată */
+.navbar {
+    background-color: var(--card-white) !important;
+    border-bottom: 1px solid var(--border-light) !important;
+    padding: 1rem 0 !important;
+    margin-bottom: 2rem !important;
+}
+
+.navbar-brand {
+    font-weight: 800 !important;
+    color: var(--brand-brown) !important;
+    font-size: 1.5rem !important;
+    letter-spacing: -0.03em !important;
+}
+
+/* --- CARDURI (The Magic Touch) --- */
+.card, .property-card, .bg-white {
+    background: var(--card-white) !important;
+    border: 1px solid var(--border-light) !important;
+    border-radius: 16px !important;
+    /* Umbră extrem de fină, fix ca la Claude */
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1) !important; 
+    padding: 24px !important; /* Spațiu generos de respirație */
+    transition: box-shadow 0.2s ease, transform 0.2s ease !important;
+}
+
+/* Efect hover mult mai subtil, fără să "sară" agresiv ecranul */
+.card:hover {
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1) !important;
+    transform: translateY(-2px);
+}
+
+/* Titlurile din interiorul cardurilor */
+.card-title, .card h5 {
+    font-size: 1.05rem !important;
+    font-weight: 600 !important;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 1.25rem !important;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-light);
+    color: var(--text-main) !important;
+}
+
+/* Culoarea iconițelor din titlurile cardurilor */
+.card-title i, .card h5 i {
+    color: var(--brand-brown) !important;
+    font-size: 1.2rem;
+}
+
+/* --- CULORI STATUS --- */
+.text-success { color: #059669 !important; font-weight: 600; }
+.text-danger { color: #dc2626 !important; font-weight: 600; }
+.text-warning { color: #d97706 !important; font-weight: 600; }
+
+/* Badge-uri rafinate */
+.badge {
+    padding: 0.35em 0.8em !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0 !important;
+}
+.bg-success-subtle { background-color: #d1fae5 !important; color: #059669 !important; }
+
+/* =========================================
+   COMPONENTĂ: CERCUL PENTRU SCOR (RESTAURAT)
+   ========================================= */
+
+.trust-score-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 1.5rem 0;
+}
+
+/* Aici desenăm graficul circular bazat pe variabila --score din HTML */
+.trust-score-circle {
+    position: relative;
+    width: 160px;
+    height: 160px;
+    border-radius: 50%;
+    background: conic-gradient(
+        var(--circle-color) calc(var(--score) * 1%), 
+        var(--border-light) 0
+    );
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Culorile cercului în funcție de scor */
+.score-high { --circle-color: #059669; } /* Verde */
+.score-mid  { --circle-color: #d97706; } /* Portocaliu */
+.score-low  { --circle-color: #dc2626; } /* Roșu */
+
+/* Decupajul din mijlocul cercului pentru a-l face inel */
+.trust-score-inner {
+    width: 136px;
+    height: 136px;
+    background-color: var(--card-white);
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); /* O umbră interioară extrem de fină */
+}
+
+/* Textul cu procentul din mijloc */
+.trust-score-value {
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: var(--text-main);
+    letter-spacing: -0.05em;
+    display: flex;
+    align-items: baseline;
+}
+
+.trust-score-value small {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-left: 2px;
+}
