@@ -9,6 +9,7 @@ from google.genai import types
 from django.conf import settings
 from .models import Listing, Report
 from django.utils import timezone
+from .data_validation import calculate_completeness_score
 
 def extract_distance_claims(description: str) -> list[dict]:
     claims = []
@@ -114,24 +115,36 @@ def verify_distance_claims(listing_lat, listing_lng, claims: list[dict], city: s
             
         time.sleep(1.0) 
         
+        # --- FIX 1: Ajutăm motorul de căutare să înțeleagă termenii generici ---
+        search_term = destination
+        dest_lower = destination.lower()
+        if dest_lower in ['metrou', 'metroul', 'statie metrou', 'stație metrou']:
+            search_term = "stație de metrou"
+        elif dest_lower in ['parc', 'parcul']:
+            search_term = "parc"
+        elif dest_lower in ['stb', 'autobuz', 'tramvai']:
+            search_term = f"stație de {dest_lower}"
+        
         nom_url = "https://nominatim.openstreetmap.org/search"
         
-        # --- MODIFICARE: Cerem top 5 și folosim Viewbox pentru a prioritiza zona apartamentului ---
+        # --- FIX 2: Bounded=1 forțează harta să NU mai caute în alte sectoare ---
         nom_params = {
-            'q': f"{destination}, {city}",
+            'q': f"{search_term}, {city}",
             'format': 'json',
             'limit': 5,
-            'viewbox': f"{listing_lng-0.05},{listing_lat+0.05},{listing_lng+0.05},{listing_lat-0.05}",
-            'bounded': 0
+            'viewbox': f"{listing_lng-0.03},{listing_lat+0.03},{listing_lng+0.03},{listing_lat-0.03}",
+            'bounded': 1 
         }
         
         try:
             nom_response = requests.get(nom_url, params=nom_params, headers=headers, timeout=5)
             nom_data = nom_response.json()
             
+            # Dacă nu găsește nimic strict în zonă, scoatem limitarea ca ultim resort
             if not nom_data:
                 time.sleep(1.0)
-                nom_params['q'] = destination # Fallback extrem
+                nom_params['q'] = search_term 
+                nom_params['bounded'] = 0 
                 nom_response = requests.get(nom_url, params=nom_params, headers=headers, timeout=5)
                 nom_data = nom_response.json()
                 
@@ -358,6 +371,43 @@ class DetectiveAgent:
         t_start = time.time()
         scor_baza = listing.data_completeness_score or 85
         data_azi = timezone.now().strftime('%d.%m.%Y')
+# --- AICI ÎNCEPE BUCATA NOUĂ PENTRU SPAȚIUL GOL ---
+        listing_dict = {
+            "Price": listing.price,
+            "Currency": listing.currency,
+            "City": listing.city,
+            "Neighborhood": listing.neighborhood,
+            "Rooms": listing.rooms,
+            "Useful surface": listing.useful_surface,
+            "Heating type": listing.heating_type,
+            "Furnishing state": listing.furnishing_state,
+            "Floor": listing.floor,
+            "Total floors": listing.total_floors,
+            "Bathrooms": listing.bathrooms,
+            "Construction year": listing.construction_year,
+            "Availability": listing.availability,
+            "Has fridge": listing.has_fridge,
+            "Has washing machine": listing.has_washing_machine,
+            "Has ac": listing.has_ac,
+            "Has oven": listing.has_oven,
+            "Has parking": listing.has_parking,
+            "Has elevator": listing.has_elevator,
+            "Near public transit": listing.near_public_transit
+        }
+        
+        validare_rezultate = calculate_completeness_score(listing_dict)
+        
+        lista_lipsuri = []
+        for warning in validare_rezultate.get('warnings', []):
+            lista_lipsuri.append(warning['message'])
+            
+        for notice in validare_rezultate.get('notices', []):
+            lista_lipsuri.append(notice)
+            
+        texte_penalizari = "\n".join([f"- {lipsa}" for lipsa in lista_lipsuri])
+        if not texte_penalizari:
+            texte_penalizari = "- Nicio penalizare tehnică din partea sistemului."
+        # --- AICI SE TERMINĂ BUCATA NOUĂ ---
 
         maps_agent = MapsAgent()
         
@@ -381,8 +431,7 @@ class DetectiveAgent:
             except Exception as e:
                 print(f"[-] Eroare Overpass POI: {e}")
         else:
-            poi_data = f"Sistemul GPS a eșuat să găsească adresa exactă. Ignoră complet această eroare tehnică! Te rog să analizezi zona '{listing.neighborhood}, {listing.city}' bazându-te exclusiv pe cunoștințele tale generale. Scrie un paragraf atractiv despre cum este viața în acest cartier (puncte de interes generale, nivel de trai, transport în comun, parcuri cunoscute). Fii util și NU menționa sub nicio formă în raport că îți lipsesc datele sau coordonatele!"
-
+            poi_data = "JSON GOl. Bazează-te pe cunoștințele generale pentru a face o scurtă recenzie a nivelului de trai și atmosferei din acest cartier."
         t_poi = time.time()
         print(f" POI fetch: {t_poi - t_coords:.1f}s")
 
@@ -392,36 +441,33 @@ class DetectiveAgent:
         # Penalizările pentru distanțe exagerate se aplică PROGRAMATIC după
 
         prompt = f"""Ești un consultant imobiliar senior din România, specializat în analiza de piață.
-            Analizează acest anunț pornind de la un Index de Încredere de bază de {scor_baza}%.
 
             DATE ANUNȚ:
             Locație: {listing.city}, {listing.neighborhood}
             Titlu: {listing.title}
             Preț: {listing.price} {listing.currency}
             Descriere: {listing.description}
-            Specificații tehnice: {listing.raw_data.get('site_specs', 'N/A')}
+            
+            LIPSURI TEHNICE GĂSITE DE SISTEM (Motivele scorului de {scor_baza}%):
+            {texte_penalizari}
 
             Puncte de interes identificate de Maps Agent în zonă (Rază 1km):
             {poi_data}
 
-            INSTRUCȚIUNI:
-            1. Scorul final trebuie să reflecte acuratețea și completitudinea datelor.
-            2. Dacă scorul final este sub 90%, incluzi în "flags" motivele.
-            3. NU scădea puncte pentru lipsa contactului telefonic.
-            4. Scade din scorul de {scor_baza}% DOAR dacă identifici contradicții , altfel afiseaza {listing.data_completeness_score}.
-            5. Dacă prețul este cu 10-20% sub medie, etichetează-l ca "Ofertă competitivă".
-            6. Data curentă: {data_azi}. Ignoră eroarea "dată în viitor" pentru ziua de azi.
-            7. Folosește POI pentru a redacta o recenzie utilă a zonei în "proximity". Incluzi distanțele EXACTE în metri (ex: "Stația de metrou X la 450m, Kaufland la 800m").
+            INSTRUCȚIUNI CRITICE PENTRU RED FLAGS ȘI SCOR:
+            1. SCOR: Scorul tău de pornire este {scor_baza}%. Scade puncte suplimentare DOAR dacă identifici tu contradicții grave (ex: distanțe false pe hartă care reies din verificarea noastră).
+            2. RED FLAGS: EȘTI OBLIGAT să iei fiecare linie din secțiunea "LIPSURI TEHNICE GĂSITE DE SISTEM" și să o adaugi exact cum este în array-ul tău de "flags". Acest lucru este crucial pentru ca utilizatorul să înțeleagă transparent de ce s-au pierdut punctele de integritate.
+            3. PROXIMITATE: Redactează câmpul "proximity" EXCLUSIV folosind atracțiile și distanțele din JSON-ul primit. Dacă nu ai date, descrie cartierul la modul general. Este absolut interzis să te plângi în text că îți lipsesc informațiile.
 
             Returnează DOAR un JSON valid:
             {{
-                "score": <int_scor_ajustat>,
-                "flags": ["listă_cu_riscuri_sau_lipsuri"],
-                "proximity": "Sinteză a vieții în zonă cu distanțe exacte...",
+                "score": <int_scor_final>,
+                "flags": ["listă_cu_lipsurile_tehnice_și_alte_riscuri"],
+                "proximity": "Sinteză a vieții în zonă...",
                 "price_analysis": {{
-                    "average_zone_price": <int_valoare_medie_estimată_în_{listing.currency}>,
-                    "difference_percentage": <int_procent>,
-                    "label": "ex: Preț conform pieței"
+                    "average_zone_price": <int>,
+                    "difference_percentage": <int>,
+                    "label": "string"
                 }},
                 "verdict": "concluzie_echilibrată"
             }}"""

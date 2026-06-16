@@ -230,9 +230,19 @@ class Command(BaseCommand):
             locatie = ', '.join(parti_locatie) if parti_locatie else 'N/A'
 
             # Coordonate GPS
-            coords = location_data.get('coordinates', {})
-            lat_extras = coords.get('latitude')
-            lng_extras = coords.get('longitude')
+            lat_extras = None
+            lng_extras = None
+            import re
+            
+            # Caută orice latitudine și longitudine validă (de România) ascunsă oriunde în structura JSON a anunțului
+            json_string = json.dumps(ad_data)
+            lat_match = re.search(r'"latitude":\s*([0-9]{2}\.[0-9]+)|"lat":\s*([0-9]{2}\.[0-9]+)', json_string)
+            lng_match = re.search(r'"longitude":\s*([0-9]{2}\.[0-9]+)|"lon(?:gitude)?":\s*([0-9]{2}\.[0-9]+)', json_string)
+            
+            if lat_match:
+                lat_extras = float(lat_match.group(1) or lat_match.group(2))
+            if lng_match:
+                lng_extras = float(lng_match.group(1) or lng_match.group(2))
 
             # Specificații — extragem din characteristics
             specs_parts = []
@@ -437,14 +447,18 @@ class Command(BaseCommand):
         lat_extras = None
         lng_extras = None
         try:
-            json_data = self._extract_next_data(page)
-            if json_data:
-                location_data = json_data.get('props', {}).get('pageProps', {}).get('ad', {}).get('location', {}).get('coordinates', {})
-                if location_data:
-                    lat_extras = location_data.get('latitude')
-                    lng_extras = location_data.get('longitude')
-        except Exception:
-            pass
+            import re
+            html_content = page.content()
+            
+            lat_match = re.search(r'"latitude":\s*([0-9]{2}\.[0-9]+)|"lat":\s*([0-9]{2}\.[0-9]+)', html_content)
+            lng_match = re.search(r'"longitude":\s*([0-9]{2}\.[0-9]+)|"lon(?:gitude)?":\s*([0-9]{2}\.[0-9]+)', html_content)
+            
+            if lat_match: 
+                lat_extras = float(lat_match.group(1) or lat_match.group(2))
+            if lng_match: 
+                lng_extras = float(lng_match.group(1) or lng_match.group(2))
+        except Exception as e:
+            self.stdout.write(f"   [Avertisment] Extragere GPS brut eșuată: {e}")
 
         # Debug
         self.stdout.write("\n" + "=" * 60)
