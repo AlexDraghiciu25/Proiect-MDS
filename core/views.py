@@ -237,23 +237,12 @@ def _run_analysis_background(task_id, url_extern, user_id):
             
             if "olx.ro" in url_lower:
                 scraper_olx = OlxScraper()
-                try:
-                    scraper_olx.proceseaza_anunt_olx(None, url_extern)
-                except AttributeError:
-                    scraper_olx.handle(url=url_extern)
+                scraper_olx.handle(url=url_extern)
                     
             elif "storia.ro" in url_lower:
                 if StoriaScraper:
                     scraper_storia = StoriaScraper()
-                    try:
-                        if hasattr(scraper_storia, 'proceseaza_anunt_storia'):
-                            scraper_storia.proceseaza_anunt_storia(None, url_extern)
-                        elif hasattr(scraper_storia, 'proceseaza_anunt_olx'):
-                            scraper_storia.proceseaza_anunt_olx(None, url_extern)
-                        else:
-                            scraper_storia.handle(url=url_extern)
-                    except Exception:
-                        scraper_storia.handle(url=url_extern)
+                    scraper_storia.handle(url=url_extern)
             else:
                 listing = scrape_single_url(url_extern)
 
@@ -264,6 +253,14 @@ def _run_analysis_background(task_id, url_extern, user_id):
             _analysis_tasks[task_id]['status'] = 'error'
             _analysis_tasks[task_id]['error'] = 'Motorul de scraping nu a putut salva datele proprietății.'
             return
+
+        try:
+            _analysis_tasks[task_id]['step'] = 'Normalizăm datele proprietății...'
+            from core.management.commands.normalize_listings import Command as NormalizeCommand
+            NormalizeCommand().handle(listing_id=listing.id)
+            listing.refresh_from_db()
+        except Exception as e:
+            print(f"Eroare la normalizarea anunțului {listing.id}: {e}")
 
         _analysis_tasks[task_id]['listing_id'] = listing.id
         
@@ -389,7 +386,11 @@ def ai_chat_endpoint(request):
                     context_analiza_ta += f"Verdict Final: {getattr(raport, 'final_verdict', '')}\n"
                     context_analiza_ta += f"Analiză de Proximitate: {getattr(raport, 'proximity_analysis', '')}\n"
                     flags = getattr(raport, 'red_flags', [])
-                    context_analiza_ta += f"Red Flags: {', '.join(flags) if isinstance(flags, list) else flags}\n"
+                    if isinstance(flags, list):
+                        flags_curate = [f.lstrip('- ').strip() for f in flags]
+                        context_analiza_ta += f"Red Flags: {', '.join(flags_curate)}\n"
+                    else:
+                        context_analiza_ta += f"Red Flags: {flags}\n"
                     context_analiza_ta += f"Analiză de Preț: {getattr(raport, 'price_analysis', '')}\n"
 
                 rapoarte_context.append({

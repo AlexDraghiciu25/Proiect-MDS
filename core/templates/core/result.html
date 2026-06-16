@@ -4,211 +4,257 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Raport AI - {{ report.listing.title|default:"Analiză" }}</title>
-
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
+    <title>Raport AI – {{ report.listing.title|default:"Analiză" }} | RentGuru</title>
+    <meta name="description" content="Analiză AI completă pentru anunțul imobiliar în {{ report.listing.city }}.">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Carattere&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
     <link rel="stylesheet" href="{% static 'css/result.css' %}">
 </head>
 <body>
 
-    <nav class="navbar navbar-expand-lg navbar-custom sticky-top">
-        <div class="container">
-            <a class="navbar-brand" href="{% url 'home' %}">RentGuru</a>
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-custom sticky-top">
+    <div class="container">
+        <a class="navbar-brand" href="{% url 'home' %}">RentGuru</a>
+        <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <i class="bi bi-list fs-2" style="color: var(--mds-brown);"></i>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0 ms-lg-4">
+                <li class="nav-item"><a class="nav-link" href="{% url 'home' %}"><i class="bi bi-house-door me-1"></i>Dashboard</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'history' %}"><i class="bi bi-clock-history me-1"></i>Istoric</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'about' %}"><i class="bi bi-info-circle me-1"></i>Despre Noi</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'contact' %}"><i class="bi bi-envelope me-1"></i>Contact</a></li>
+            </ul>
             <div class="d-flex align-items-center mt-3 mt-lg-0">
                 <span class="me-3 fw-bold" style="color: var(--mds-brown);">Salut, {{ user.username|default:"Oaspete" }}!</span>
+                <form action="{% url 'logout' %}" method="post" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
+                        <i class="bi bi-box-arrow-right me-1"></i> Ieși
+                    </button>
+                </form>
             </div>
         </div>
-    </nav>
+    </div>
+</nav>
 
-    <section class="search-header">
-        <div class="container">
-            <div class="row justify-content-center">
-                <div class="col-lg-8">
-                    <form action="{% url 'analyze_external' %}" method="POST" class="search-input-group d-flex">
-                        {% csrf_token %}
-                        <input type="url" name="external_url" class="form-control" placeholder="Lipește un nou link..." required>
-                        <button class="btn btn-analyze" type="submit"><i class="bi bi-magic me-1"></i> Analizează</button>
-                    </form>
-                </div>
-            </div>
+<!-- Hero -->
+<div class="report-hero">
+    <div class="container">
+        <div class="status-pill"><i class="bi bi-check-circle-fill"></i> Analiză finalizată</div>
+        <h1 class="prop-title">{{ report.listing.title }}</h1>
+        <div class="prop-meta mb-4">
+            <span><i class="bi bi-geo-alt" style="color:var(--mds-green);"></i> {{ report.listing.city }}{% if report.listing.neighborhood %}, {{ report.listing.neighborhood }}{% endif %}</span>
+            <span><i class="bi bi-link-45deg" style="color:var(--mds-green);"></i> {{ report.listing.source_website|default:"Sursă externă" }}</span>
+            <span><i class="bi bi-calendar3" style="color:var(--mds-green);"></i> {{ report.generated_at|date:"d M Y" }}</span>
         </div>
-    </section>
+        <form action="{% url 'analyze_external' %}" method="POST" class="search-bar-group">
+            {% csrf_token %}
+            <input type="url" name="external_url" class="form-control" placeholder="Analizează un alt anunț..." required>
+            <button class="btn-analyze" type="submit"><i class="bi bi-magic me-1"></i> Analizează</button>
+        </form>
+    </div>
+</div>
 
-    <section class="report-section">
-        <div class="container my-5" style="max-width: 1200px;">
-            
-            <div class="mb-5 border-bottom pb-4">
-                <span class="badge bg-success-subtle mb-3"><i class="bi bi-check-circle me-1"></i> Analiză Finalizată</span>
-                <h1 class="property-title">{{ report.listing.title }}</h1>
-                <p class="text-muted mb-0" style="font-size: 1.05rem;">
-                    <i class="bi bi-geo-alt me-1"></i> {{ report.listing.city }}, {{ report.listing.neighborhood|default:"Zonă nespecificată" }} 
-                    • Sursă: {{ report.listing.source_website|default:"Externă" }}
-                </p>
-            </div>
+<!-- Report Body -->
+<div class="report-body">
+    <div class="container-fluid px-4" style="max-width: 1600px;">
+        <div class="row g-4">
 
-            <div class="row g-4">
+            <!-- Coloana stângă: Scor + Preț -->
+            <div class="col-lg-4 d-flex flex-column gap-4">
 
-                <div class="col-lg-4 d-flex flex-column gap-4">
-                    
-                    <div class="card h-100">
-                        <h5 class="card-title"><i class="bi bi-shield-check"></i> Index de Încredere</h5>
-                        <div class="trust-score-container text-center mt-3">
-                            {% if report %}
-                                <div class="trust-score-circle mx-auto {% if report.integrity_score > 70 %}score-high{% elif report.integrity_score > 40 %}score-mid{% else %}score-low{% endif %}" 
-                                    style="--score: {{ report.integrity_score }}%;">
-                                    <div class="trust-score-inner">
-                                        <span class="trust-score-value">{{ report.integrity_score }}<small class="fs-6">%</small></span>
-                                    </div>
-                                </div>
-                            {% else %}
-                                <div class="trust-score-circle score-empty mx-auto" style="--score: 0%;">
-                                    <div class="trust-score-inner">
-                                        <span class="trust-score-value text-muted">--</span>
-                                    </div>
-                                </div>
-                            {% endif %}
-                        </div>
-                    </div>
-
-                    <div class="card h-100">
-                        <h5 class="card-title"><i class="bi bi-tag-fill"></i> Detalii Preț</h5>
-                        <div class="d-flex flex-column gap-3 mt-2">
-                            <div>
-                                <span class="text-uppercase fw-bold text-muted" style="font-size: 0.75rem; letter-spacing: 0.5px;">Preț Cerut</span>
-                                <div class="d-flex align-items-baseline gap-2 mt-1">
-                                    <span class="fw-bold text-dark" style="font-size: 2.2rem; line-height: 1;">{{ listing.price }}</span>
-                                    <span class="fw-semibold text-muted">{{ listing.currency|default:"EUR" }}</span>
-                                </div>
+                <!-- Scor de Încredere -->
+                <div class="rg-card" style="animation-delay:.05s">
+                    <div class="rg-card-title"><i class="bi bi-shield-check"></i> Index de Încredere</div>
+                    {% if report %}
+                    {% with s=report.integrity_score %}
+                    <div class="score-wrap">
+                        <div class="score-ring">
+                            <svg viewBox="0 0 200 200">
+                                <circle class="track" cx="100" cy="100" r="82" />
+                                <circle class="fill" id="scoreCircle" cx="100" cy="100" r="82" data-score="{{ s }}" stroke="{% if s > 70 %}#2D4A22{% elif s > 40 %}#b47800{% else %}#b42828{% endif %}" />
+                            </svg>
+                            <div class="score-center">
+                                <span class="score-num" style="color:{% if s > 70 %}var(--mds-green){% elif s > 40 %}#b47800{% else %}#b42828{% endif %}">{{ s }}<span class="score-pct">%</span></span>
+                                <span class="score-sub">integritate</span>
                             </div>
-
-                            <hr style="border-color: var(--border-light); margin: 0;">
-                            
-                            {% if report.price_analysis %}
-                            <div class="d-flex flex-column gap-2">
-                                <span class="badge {% if report.price_analysis.difference_percentage == 0 %}bg-secondary{% elif report.price_analysis.difference_percentage < 0 %}bg-success{% else %}bg-danger{% endif %}" style="width: fit-content;">
-                                    {% if report.price_analysis.difference_percentage == 0 %}
-                                        <i class="bi bi-check-circle-fill me-1"></i> Preț conform pieței
-                                    {% else %}
-                                        {{ report.price_analysis.difference_percentage }}% față de medie
-                                    {% endif %}
-                                </span>
-
-                                <p class="mb-0 text-muted" style="font-size: 0.95rem;">
-                                    {{ report.price_analysis.label }}
-                                </p>
-
-                                <div class="mt-2 pt-2 border-top text-muted" style="font-size: 0.85rem;">
-                                    <i class="bi bi-info-circle me-1"></i>
-                                    Media zonei: <strong class="text-dark">{{ report.price_analysis.average_zone_price }} {{ listing.currency|default:"EUR" }}</strong>
-                                </div>
-                            </div>
-                            {% endif %}
                         </div>
+                        <span class="score-label {% if s > 70 %}sl-high{% elif s > 40 %}sl-mid{% else %}sl-low{% endif %}">
+                            {% if s > 70 %}<i class="bi bi-shield-fill-check me-1"></i>Anunț de Încredere
+                            {% elif s > 40 %}<i class="bi bi-shield-fill-exclamation me-1"></i>Necesită Atenție
+                            {% else %}<i class="bi bi-shield-fill-x me-1"></i>Risc Ridicat{% endif %}
+                        </span>
                     </div>
-
+                    {% endwith %}
+                    {% endif %}
                 </div>
 
-                <div class="col-lg-8 d-flex flex-column gap-4">
-                    
-                    <div class="card">
-                        <h5 class="card-title"><i class="bi bi-robot"></i> Concluzia Agentului AI</h5>
-                        <p class="mb-0 text-muted">{{ report.final_verdict }}</p>
-                    </div>
-
-                    {% if report.distance_verification %}
-                    <div class="card">
-                        <h5 class="card-title"><i class="bi bi-signpost-split"></i> Verificare Afirmații Distanță</h5>
-                        <div class="table-responsive mt-2">
-                            <table class="table align-middle mb-0" style="font-size: 0.95rem;">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th class="text-muted fw-semibold border-bottom-0">Afirmație Proprietar</th>
-                                        <th class="text-muted fw-semibold border-bottom-0">Distanță Reală pe Hartă</th>
-                                        <th class="text-muted fw-semibold border-bottom-0">Verdict AI</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for verificare in report.distance_verification %}
-                                    <tr style="border-bottom: 1px solid var(--border-light);">
-                                        <td class="text-muted fst-italic">"{{ verificare.claim }}"</td>
-                                        <td class="fw-medium text-dark">{{ verificare.real }}</td>
-                                        <td class="fw-bold {% if 'CONFIRMAT' in verificare.verdict %}text-success{% elif 'EXAGERAT' in verificare.verdict %}text-warning{% else %}text-danger{% endif %}">
-                                            {% if 'CONFIRMAT' in verificare.verdict %}<i class="bi bi-check-circle-fill me-1"></i>{% elif 'EXAGERAT' in verificare.verdict %}<i class="bi bi-exclamation-triangle-fill me-1"></i>{% else %}<i class="bi bi-x-circle-fill me-1"></i>{% endif %}
-                                            {{ verificare.verdict }}
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
+                <!-- Analiza Prețului -->
+                <div class="rg-card" style="animation-delay:.1s">
+                    <div class="rg-card-title"><i class="bi bi-tag-fill"></i> Analiza Prețului</div>
+                    <div class="price-big">{{ listing.price }} <span style="font-size:1rem; font-weight:400; color:#a08070;">{{ listing.currency|default:"EUR" }}/lună</span></div>
+                    {% if report.price_analysis %}
+                    <hr class="rg-divider">
+                    <div class="d-flex flex-column gap-2">
+                        {% if report.price_analysis.difference_percentage > 0 %}
+                            <span class="diff-pill dp-up"><i class="bi bi-arrow-up"></i> +{{ report.price_analysis.difference_percentage }}% față de medie</span>
+                        {% elif report.price_analysis.difference_percentage < 0 %}
+                            <span class="diff-pill dp-down"><i class="bi bi-arrow-down"></i> {{ report.price_analysis.difference_percentage }}% față de medie</span>
+                        {% else %}
+                            <span class="diff-pill dp-eq"><i class="bi bi-dash"></i> Conform pieței</span>
+                        {% endif %}
+                        <p style="font-size:0.875rem; color:#5a4a42; line-height:1.65; margin:0;">{{ report.price_analysis.label }}</p>
+                        <div style="display:flex; justify-content:space-between; font-size:0.82rem; border-top:1px solid #f0ebe4; padding-top:10px; margin-top:4px;">
+                            <span style="color:#a08070;">Media zonei (€/m²)</span>
+                            <strong style="color:var(--mds-brown);">{{ report.price_analysis.average_zone_price }}</strong>
                         </div>
                     </div>
                     {% endif %}
+                </div>
 
-                    <div class="row g-4 m-0 p-0">
-                        
-                        <div class="col-md-6 p-0 pe-md-2">
-                            <div class="card h-100">
-                                <h5 class="card-title"><i class="bi bi-exclamation-triangle"></i> Atenție (Red Flags)</h5>
-                                <ul class="list-unstyled mb-0 mt-2">
-                                    {% if report.red_flags %}
-                                        <li class="d-flex">
-                                            <i class="bi bi-exclamation-circle-fill me-2 text-danger mt-1"></i>
-                                            <div class="small text-danger fw-medium">
-                                                {{ report.red_flags|join:", " }}.
-                                            </div>
-                                        </li>
-                                    {% else %}
-                                        {% if listing.data_completeness_score < 80 %}
-                                        <li class="d-flex">
-                                            <i class="bi bi-info-circle me-2 text-warning mt-1"></i>
-                                            <div class="small text-muted">Scor diminuat din cauza lipsei unor detalii tehnice complete în anunț.</div>
-                                        </li>
-                                        {% else %}
-                                        <li class="d-flex align-items-center text-success small fw-medium">
-                                            <i class="bi bi-check-circle-fill me-2"></i> Datele anunțului sunt consistente.
-                                        </li>
-                                        {% endif %}
-                                    {% endif %}
-                                </ul>
-                            </div>
-                        </div>
+            </div>
 
-                        <div class="col-md-6 p-0 ps-md-2">
-                            <div class="card h-100">
-                                <h5 class="card-title"><i class="bi bi-geo-alt-fill"></i> Analiza Proximității</h5>
-                                <div class="text-muted mt-2" style="font-size: 0.95rem;">
-                                    {% if report.proximity_analysis %}
-                                        {{ report.proximity_analysis|linebreaks }}
-                                        {% if "zgomot" in report.proximity_analysis|lower or "club" in report.proximity_analysis|lower %}
-                                            <div class="alert alert-warning mt-3 py-2 px-3 border-0 d-flex align-items-center" style="background-color: #fef3c7; color: #92400e; border-radius: 8px;">
-                                                <i class="bi bi-volume-up-fill me-2"></i> 
-                                                <small class="fw-medium">Atenție: Zonă potențial zgomotoasă.</small>
-                                            </div>
-                                        {% endif %}
+            <!-- Coloana dreaptă -->
+            <div class="col-lg-8 d-flex flex-column gap-4">
+
+                <!-- Concluzia AI -->
+                <div class="rg-card" style="animation-delay:.12s">
+                    <div class="rg-card-title"><i class="bi bi-robot"></i> Concluzia Agentului AI</div>
+                    <p class="verdict-text">{{ report.final_verdict }}</p>
+                </div>
+
+                <!-- Red Flags + Proximitate -->
+                <div class="row g-4 align-items-stretch">
+
+                    <!-- Red Flags -->
+                    <div class="col-md-6">
+                        <div class="rg-card h-100" style="animation-delay:.22s">
+                            <div class="rg-card-title"><i class="bi bi-exclamation-triangle"></i> Atenționări</div>
+                            {% if report.red_flags %}
+                                {% for flag in report.red_flags %}
+                                    {% if flag|slice:":5" == "BAZA:" %}
+                                        <div class="flag-item">
+                                            <i class="bi bi-exclamation-circle-fill"></i>
+                                            <div>Informații de bază lipsă: {{ flag|slice:"5:" }}</div>
+                                        </div>
+                                    {% elif flag|slice:":8" == "DETALII:" %}
+                                        <div class="flag-item flag-details">
+                                            <i class="bi bi-info-circle-fill"></i>
+                                            <details>
+                                                <summary>Facilități nemenționate ▾</summary>
+                                                <div class="details-body">{{ flag|slice:"8:" }}</div>
+                                            </details>
+                                        </div>
                                     {% else %}
-                                        <p class="mb-0">Informațiile despre proximitate nu sunt disponibile.</p>
+                                        <div class="flag-item">
+                                            <i class="bi bi-exclamation-circle-fill"></i>
+                                            <div>{{ flag|cut:"- "|capfirst }}</div>
+                                        </div>
                                     {% endif %}
+                                {% endfor %}
+                            {% else %}
+                                <div class="flag-ok">
+                                    <i class="bi bi-check-circle-fill"></i> Nicio problemă detectată
                                 </div>
-                            </div>
+                            {% endif %}
                         </div>
-
                     </div>
+
+                    <!-- Proximitate -->
+                    <div class="col-md-6">
+                        <div class="rg-card h-100" style="animation-delay:.27s">
+                            <div class="rg-card-title"><i class="bi bi-geo-alt-fill"></i> Cartier & Proximitate</div>
+                            {% if report.proximity_analysis %}
+                                <p class="proximity-text">{{ report.proximity_analysis }}</p>
+                                {% if "zgomot" in report.proximity_analysis|lower or "club" in report.proximity_analysis|lower %}
+                                <div class="noise-alert">
+                                    <i class="bi bi-volume-up-fill"></i> Zonă potențial zgomotoasă
+                                </div>
+                                {% endif %}
+                            {% else %}
+                                <p style="color:#a08070; font-size:0.875rem;">Date de proximitate indisponibile.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </div>
-    </section>
+    </div>
 
-    <footer class="footer-custom mt-5">
-        <div class="container text-center">
-            <p>&copy; 2026 RentGuru. Toate drepturile rezervate.</p>
+    <!-- Verificare Distanțe — full-width sub grid -->
+    {% if report.distance_verification %}
+    <div class="container-fluid px-4 mt-4" style="max-width: 1600px;">
+        <div class="rg-card" style="animation-delay:.32s">
+            <div class="rg-card-title"><i class="bi bi-signpost-split"></i> Verificare Afirmații Distanță</div>
+            <table class="dist-table">
+                <thead>
+                    <tr>
+                        <th>Afirmație proprietar</th>
+                        <th>Distanță reală pe hartă</th>
+                        <th>Verdict</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for v in report.distance_verification %}
+                    <tr>
+                        <td class="claim-cell">"{{ v.claim }}"</td>
+                        <td style="font-weight:600; color:var(--mds-brown);">{{ v.real }}</td>
+                        <td>
+                            {% if "CONFIRMAT" in v.verdict %}<span class="verd-pill vp-ok"><i class="bi bi-check-circle-fill"></i> {{ v.verdict }}</span>
+                            {% elif "EXAGERAT" in v.verdict %}<span class="verd-pill vp-warn"><i class="bi bi-exclamation-triangle-fill"></i> {{ v.verdict }}</span>
+                            {% else %}<span class="verd-pill vp-bad"><i class="bi bi-x-circle-fill"></i> {{ v.verdict }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
-    </footer>
+    </div>
+    {% endif %}
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<!-- Footer -->
+<footer class="footer-custom mt-0">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-md-6 mb-4 mb-md-0 text-center text-md-start">
+                <a href="{% url 'home' %}" class="footer-brand d-block mb-2">RentGuru</a>
+                <p class="text-muted small mb-0">Platforma inteligentă pentru găsirea și evaluarea locuințelor.<br>Transformăm închirierea într-o experiență sigură și premium.</p>
+            </div>
+            <div class="col-md-6 text-center text-md-end">
+                <p class="fw-bold mb-2" style="color: var(--mds-brown);">Urmărește-ne</p>
+                <div class="social-links justify-content-center justify-content-md-end">
+                    <a href="https://www.facebook.com/profile.php?id=61574339169340" class="social-icon fb" title="Facebook"><i class="bi bi-facebook"></i></a>
+                    <a href="https://www.instagram.com/rentguru.ro/" class="social-icon ig" title="Instagram"><i class="bi bi-instagram"></i></a>
+                    <a href="https://wa.me/40771146577" class="social-icon wa" title="WhatsApp"><i class="bi bi-whatsapp"></i></a>
+                </div>
+            </div>
+        </div>
+        <hr class="footer-divider">
+        <div class="text-center">
+            <p class="footer-text">&copy; 2026 RentGuru. Toate drepturile rezervate.</p>
+        </div>
+    </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    window.addEventListener('DOMContentLoaded', () => {
+        const circle = document.getElementById('scoreCircle');
+        if (!circle) return;
+        const score = parseInt(circle.dataset.score, 10);
+        const circumference = 2 * Math.PI * 82;
+        const offset = circumference - (score / 100) * circumference;
+        setTimeout(() => { circle.style.strokeDashoffset = offset; }, 120);
+    });
+</script>
 </body>
 </html>

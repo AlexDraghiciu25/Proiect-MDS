@@ -6,6 +6,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from google import genai
 from google.genai import types
+from django.db.models import Avg
 from django.conf import settings
 from .models import Listing, Report
 from django.utils import timezone
@@ -397,16 +398,57 @@ class DetectiveAgent:
         
         validare_rezultate = calculate_completeness_score(listing_dict)
         
-        lista_lipsuri = []
+        lista_lipsuri = []  # va fi adăugată programatic în flags după răspunsul AI
         for warning in validare_rezultate.get('warnings', []):
             lista_lipsuri.append(warning['message'])
-            
         for notice in validare_rezultate.get('notices', []):
             lista_lipsuri.append(notice)
+
+        # Extragem categoriile deja acoperite de sistem (pentru a preveni duplicarea în AI flags)
+        teme_sistem = []
+        for lipsura in lista_lipsuri:
+            if lipsura.startswith('BAZA:'):
+                teme_sistem.append("câmpuri de bază (preț, camere, suprafață, etaj, mobilier, încălzire, etc.)")
+            if lipsura.startswith('DETALII:'):
+                teme_sistem.append("facilități și finisaje (dotări electrocasnice, parcare, lift, internet, etc.)")
+        teme_sistem_str = ", ".join(set(teme_sistem)) if teme_sistem else "nicio temă"
             
         texte_penalizari = "\n".join([f"- {lipsa}" for lipsa in lista_lipsuri])
         if not texte_penalizari:
             texte_penalizari = "- Nicio penalizare tehnică din partea sistemului."
+
+        # --- Preț mediu pe cartier din DB (preț/mp) ---
+        pret_mediu_cartier = None
+        context_pret = ""
+        if listing.neighborhood and listing.city:
+            from django.db.models import ExpressionWrapper, FloatField, F
+            qs = Listing.objects.filter(
+                neighborhood__iexact=listing.neighborhood,
+                city__iexact=listing.city,
+                processing_status='PROCESSED',
+                price__isnull=False,
+                useful_surface__isnull=False,
+                useful_surface__gt=0,
+            ).exclude(pk=listing.pk).annotate(
+                pret_mp=ExpressionWrapper(
+                    F('price') / F('useful_surface'),
+                    output_field=FloatField()
+                )
+            )
+            agg = qs.aggregate(avg=Avg('pret_mp'))
+            pret_mediu_mp = round(float(agg['avg']), 2) if agg['avg'] else None
+        else:
+            pret_mediu_mp = None
+
+        if pret_mediu_mp and listing.price and listing.useful_surface:
+            pret_mp_curent = round(float(listing.price) / float(listing.useful_surface), 2)
+            diff_pct = round(((pret_mp_curent - pret_mediu_mp) / pret_mediu_mp) * 100)
+            semn = "+" if diff_pct >= 0 else ""
+            context_pret = (f"\n            DATE REALE PREȚ/MP (din baza noastră de date pentru {listing.neighborhood}, {listing.city}): "
+                           f"Prețul mediu/mp al anunțurilor similare procesate este {pret_mediu_mp} {listing.currency}/mp. "
+                           f"Anunțul curent are {pret_mp_curent} {listing.currency}/mp, adică {semn}{diff_pct}% față de medie.")
+            pret_mediu_cartier = round(pret_mediu_mp)  # pentru instrucțiunea PRICE ANALYSIS
+        # --- Sfârșit calcul preț ---
         # --- AICI SE TERMINĂ BUCATA NOUĂ ---
 
         maps_agent = MapsAgent()
@@ -447,7 +489,8 @@ class DetectiveAgent:
             Titlu: {listing.title}
             Preț: {listing.price} {listing.currency}
             Descriere: {listing.description}
-            
+            {context_pret}
+
             LIPSURI TEHNICE GĂSITE DE SISTEM (Motivele scorului de {scor_baza}%):
             {texte_penalizari}
 
@@ -455,19 +498,20 @@ class DetectiveAgent:
             {poi_data}
 
             INSTRUCȚIUNI CRITICE PENTRU RED FLAGS ȘI SCOR:
-            1. SCOR: Scorul tău de pornire este {scor_baza}%. Scade puncte suplimentare DOAR dacă identifici tu contradicții grave (ex: distanțe false pe hartă care reies din verificarea noastră).
-            2. RED FLAGS: EȘTI OBLIGAT să iei fiecare linie din secțiunea "LIPSURI TEHNICE GĂSITE DE SISTEM" și să o adaugi exact cum este în array-ul tău de "flags". Acest lucru este crucial pentru ca utilizatorul să înțeleagă transparent de ce s-au pierdut punctele de integritate.
-            3. PROXIMITATE: Redactează câmpul "proximity" EXCLUSIV folosind atracțiile și distanțele din JSON-ul primit. Dacă nu ai date, descrie cartierul la modul general. Este absolut interzis să te plângi în text că îți lipsesc informațiile.
+            1. SCOR: Scorul tău de pornire este {scor_baza}%. Scade puncte suplimentare DOAR dacă identifici tu contradicții între descriere și datele tehnice. Nu scadea tu puncte pentru detalii care lipsesc de la datele tehnice, pentru ca sistemul a facut deja asta. Nu scadea puncte nici pentru distante diferite fata de cele din descriere. 
+            2. RED FLAGS: Adaugă în "flags" DOAR riscuri pe care le descoperi TU din analiza descrierii și a prețului. INTERZIS să menționezi în flags: {teme_sistem_str} — acestea sunt deja acoperite automat de sistem și vor apărea separat.
+            3. PRICE ANALYSIS: {'Folosește datele reale din secțiunea DATE REALE PREȚ de mai sus pentru câmpul price_analysis. average_zone_price=' + str(pret_mediu_cartier) + ' (EUR/mp, medie din baza noastră de date)' if pret_mediu_cartier else 'Estimează prețul mediu/mp pe zona menționată conform cunoștințelor tale despre piața imobiliară din România. Câmpul average_zone_price va reprezenta EUR/mp.'}
+            4. PROXIMITATE: Redactează câmpul "proximity" EXCLUSIV folosind atracțiile și distanțele din JSON-ul primit. Dacă nu ai date, descrie cartierul la modul general. Este absolut interzis să te plângi în text că îți lipsesc informațiile.
 
             Returnează DOAR un JSON valid:
             {{
                 "score": <int_scor_final>,
-                "flags": ["listă_cu_lipsurile_tehnice_și_alte_riscuri"],
+                "flags": ["riscuri_descoperite_de_AI"],
                 "proximity": "Sinteză a vieții în zonă...",
                 "price_analysis": {{
-                    "average_zone_price": <int>,
-                    "difference_percentage": <int>,
-                    "label": "string"
+                    "average_zone_price": <float_pret_mediu_pe_mp>,
+                    "difference_percentage": <int_procent_diferenta>,
+                    "label": "string_explicatie"
                 }},
                 "verdict": "concluzie_echilibrată"
             }}"""
@@ -532,7 +576,7 @@ class DetectiveAgent:
 
         data = gemini_result[0]
 
-        # ── FAZA 3: Aplicăm penalizări pentru distanțe exagerate (PROGRAMATIC) ──
+        # ── FAZA 3: Aplicăm flag-uri pentru distanțe exagerate, DAR FĂRĂ SĂ SCĂDEM SCORUL ──
         distance_verification_results = []
         score_adjustment = 0
         
@@ -545,24 +589,26 @@ class DetectiveAgent:
             }
             distance_verification_results.append(entry)
             
-            # Penalizări automate bazate pe verdict
+            # Adăugăm red flags bazate pe verdict, dar NU mai scădem scorul
             if verdict == "UȘOR EXAGERAT":
-                score_adjustment -= 5
                 data.setdefault('flags', []).append(
                     f"Distanța către {vc['destination']} e ușor exagerată (afirmat: {vc['claimed_minutes']}min, real: {vc['real_minutes']}min)"
                 )
             elif verdict == "FALS / ÎNȘELĂTOR":
-                score_adjustment -= 15
                 data.setdefault('flags', []).append(
                     f"Distanța către {vc['destination']} e fals înșelătoare! (afirmat: {vc['claimed_minutes']}min, real: {vc['real_minutes']}min)"
                 )
             elif "PIN FALS" in verdict:
-                score_adjustment -= 25
                 data.setdefault('flags', []).append(
                     f"PIN FALS PE HARTĂ: Agentul a plasat pinul GPS mai aproape de {vc['destination']} pentru a trișa căutările!"
                 )
 
         final_score = max(0, min(100, data.get('score', scor_baza) + score_adjustment))
+
+        # Adăugăm programatic flags-urile sistemului (BAZA: și DETALII:) la începutul listei
+        ai_flags = data.get('flags', [])
+        system_flags = lista_lipsuri  # conține deja "BAZA:..." și "DETALII:..."
+        data['flags'] = system_flags + ai_flags
 
         t_end = time.time()
         print(f" TOTAL analyze_listing: {t_end - t_start:.1f}s (Gemini+Dist paralel: {t_parallel - t_poi:.1f}s, POI: {t_poi - t_coords:.1f}s)")

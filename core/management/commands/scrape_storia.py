@@ -22,6 +22,10 @@ class Command(BaseCommand):
             '--limit', type=int, default=40,
             help='Numărul maxim de anunțuri de procesat per rulare (default: 40)'
         )
+        parser.add_argument(
+            '--url', type=str, default=None,
+            help='URL manual pasat direct din interfața RentGuru'
+        )
 
     def handle(self, *args, **options):
         os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
@@ -50,6 +54,13 @@ class Command(BaseCommand):
             context.route("**/*google-analytics*", lambda route: route.abort())
             context.route("**/*doubleclick*", lambda route: route.abort())
             context.route("**/*facebook*", lambda route: route.abort())
+
+            url_manual = options.get('url')
+            if url_manual:
+                self.stdout.write(self.style.WARNING(f" 🎯 [Manual Run] Se procesează exclusiv link-ul cerut: {url_manual[:50]}..."))
+                self.proceseaza_anunt(context, url_manual)
+                browser.close()
+                return
 
             main_page = context.new_page()
             url_cautare = f"https://www.storia.ro/ro/rezultate/inchiriere/apartament/{city_slug}"
