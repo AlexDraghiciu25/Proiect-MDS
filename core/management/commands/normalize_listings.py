@@ -19,7 +19,6 @@ class Command(BaseCommand):
             pending_listings = Listing.objects.filter(id=listing_id)
         else:
             pending_listings = Listing.objects.filter(processing_status='PENDING')
-        #pending_listings = Listing.objects.filter(processing_status='PENDING')
 
         count = pending_listings.count()
         
@@ -311,6 +310,24 @@ class Command(BaseCommand):
                                 zona_curata = ", ".join(parti_utile[-2:])
                             break
 
+
+            if str(anunt.source_website).lower() == 'olx.ro':
+                match_specs_mp = re.search(r'(?:suprafata utila|suprafata)[\s:\-]*(\d+(?:[.,]\d+)?)', specs, re.IGNORECASE)
+                if match_specs_mp:
+                    try: suprafata_curata = float(match_specs_mp.group(1).replace(',', '.'))
+                    except: pass
+                match_specs_etaj = re.search(r'etaj[\s:\-]*([\w\d/]+|parter|demisol|mansarda)', specs, re.IGNORECASE)
+                if match_specs_etaj:
+                    val_etaj = match_specs_etaj.group(1).strip().lower()
+                    if 'part' in val_etaj or val_etaj == '0': etaj_curat = '0'
+                    elif 'demi' in val_etaj: etaj_curat = '-1'
+                    elif 'mans' in val_etaj: etaj_curat = 'M'
+                    else:
+                        cifre = re.sub(r'\D', '', val_etaj)
+                        if cifre: etaj_curat = cifre
+                match_specs_an = re.search(r'(?:an constructie|anul constructiei|constructie|construit)[\s:\-]*.*?(\d{4})', specs, re.IGNORECASE)
+                if match_specs_an: an_constructie = int(match_specs_an.group(1))
+                if not zona_curata or zona_curata.strip() == "": zona_curata = oras_curat
             
             def extrage_reguli_vicii(text):
                 vicii_gasite = []

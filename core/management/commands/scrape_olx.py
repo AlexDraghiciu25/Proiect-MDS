@@ -148,6 +148,13 @@ class Command(BaseCommand):
     def proceseaza_anunt_olx(self, context, url):
         """Punct de legătură sincron pentru apeluri individuale asincrone din views."""
         if Listing.objects.filter(source_url=url).exists():
+            listing = Listing.objects.filter(source_url=url).first()
+            if listing and listing.processing_status == 'PENDING':
+                try:
+                    from django.core.management import call_command
+                    call_command('normalize_listings', listing_id=listing.id)
+                except:
+                    pass
             return False
         page = context.new_page()
         try:
@@ -287,7 +294,64 @@ class Command(BaseCommand):
         except Exception as e:
             self.stdout.write(self.style.ERROR(f"   [Maps API Error] Defect la geocoding pentru '{locatie_completa}': {e}"))
 
-        text_total = f"{titlu} {descriere}".lower()
+        # 🛠️ [TIMING FIX] Forțăm Playwright să aștepte randerizarea asincronă a containerului trimis de tine
+        try:
+            page.wait_for_selector('[data-testid="ad-parameters-container"], p.css-odhutu', timeout=4000)
+        except:
+            pass
+
+        # 🛠️ [EXTRACTOR PARALEL DOM + JSON STATE] Colectare imună la schimbările de structură
+        specs_brute = page.evaluate("""function() {
+            var specs = [];
+            
+            // Strategia A: Extragere directă din starea de hidratare din fundal (100% imună la CSS)
+            try {
+                var state = window.__PRERENDERED_STATE__ || window.__INITIAL_STATE__;
+                if (state) {
+                    var adData = state.ad?.ad || state.ad || state.adData;
+                    if (adData && adData.attributes) {
+                        adData.attributes.forEach(function(attr) {
+                            var label = attr.label || attr.key;
+                            var val = attr.value?.label || attr.value?.name || attr.value;
+                            if (label && val) {
+                                var pair = label.trim() + ": " + String(val).trim();
+                                if (specs.indexOf(pair) === -1) specs.push(pair);
+                            }
+                        });
+                    }
+                }
+            } catch(e) {}
+            
+            // Strategia B: Scanare directă în containerul de test trimis de tine (ca siguranță)
+            var modernContainer = document.querySelector('[data-testid="ad-parameters-container"]');
+            if (modernContainer) {
+                var paragraphs = modernContainer.querySelectorAll('p');
+                paragraphs.forEach(function(p) {
+                    var txt = p.innerText ? p.innerText.trim() : "";
+                    if (txt) {
+                        var flatTxt = txt.replace(/\\s*\\n\\s*/g, ': ').trim();
+                        if (specs.indexOf(flatTxt) === -1) specs.push(flatTxt);
+                    }
+                });
+            }
+            
+            // Strategia C: Fallback pe clasele specifice din div
+            if (specs.length === 0) {
+                var elements = document.querySelectorAll('.css-odhutu, [data-nx-name="P3"]');
+                elements.forEach(function(el) {
+                    var txt = el.innerText ? el.innerText.trim() : "";
+                    if (txt) {
+                        var flatTxt = txt.replace(/\\s*\\n\\s*/g, ': ').trim();
+                        if (specs.indexOf(flatTxt) === -1) specs.push(flatTxt);
+                    }
+                });
+            }
+            
+            return specs.join(' | ');
+        }""")
+
+        specs_curatate = specs_brute.lower().replace("m²", "mp")
+        text_total = f"{titlu} {descriere} {specs_curatate}".lower()
         
         camere = 1 if "garsonier" in text_total or "1 camer" in text_total else (2 if "2 camer" in text_total or "doua camer" in text_total else (3 if "3 camer" in text_total else (4 if "4 camer" in text_total else None)))
         etaj = "P" if "parter" in text_total or "etaj p" in text_total else (re.search(r'etaj(?:ul)?\s*(\d+)', text_total).group(1) if re.search(r'etaj(?:ul)?\s*(\d+)', text_total) else None)
@@ -303,11 +367,44 @@ class Command(BaseCommand):
         if not suprafata:
             suprafata = 40.0 if camere == 1 else (55.0 if camere == 2 else (75.0 if camere == 3 else 50.0))
 
+        an_constructie = None
+        match_an = re.search(r'(\d{4})\s*[\–\-]\s*(\d{4})|(?:\ban\b|\bbloc\b|\bconstructie\b|\banul\b|dupa|după).*?(\d{4})', text_total)
+        if match_an:
+            an_constructie = int(match_an.group(1) or match_an.group(3))
+
         def check_feat(keywords): return True if any(k in text_total for k in keywords) else None
 
-        moneda_finala = "RON"
-        if "eur" in str(currency).lower() or "€" in str(currency) or (pret_curat and pret_curat < 1600):
+        moneda_finala = "EUR"  
+        currency_raw = str(currency).upper()
+
+        if "RON" in currency_raw or "LEI" in currency_raw:
+            moneda_finala = "RON"
+        elif "EUR" in currency_raw or "€" in currency_raw:
             moneda_finala = "EUR"
+
+        try:
+            pret_el = page.locator('[data-testid="ad-price-container"] h3').first
+            if pret_el.count() > 0:
+                txt_pret = pret_el.inner_text().lower()
+                if "lei" in txt_pret or "ron" in txt_pret:
+                    moneda_finala = "RON"
+                elif "€" in txt_pret or "eur" in txt_pret:
+                    moneda_finala = "EUR"
+        except:
+            pass
+
+        if pret_curat:
+            if moneda_finala == "RON" and pret_curat < 900:
+                if "lei" not in text_total and "ron" not in text_total:
+                    moneda_finala = "EUR"
+            elif moneda_finala == "EUR" and pret_curat > 1000:
+                if "lei" in text_total or "ron" in text_total:
+                    if "euro" not in text_total and "eur" not in text_total and "€" not in text_total:
+                        moneda_finala = "RON"
+
+        pret_afisaj_curat = "N/A"
+        if pret_curat:
+            pret_afisaj_curat = f"{int(pret_curat) if pret_curat.is_integer() else pret_curat} {moneda_finala}"
 
         self.stdout.write("\n" + "="*60)
         self.stdout.write(f"🔗 OLX NAȚIONAL URL: {url[:45]}...")
@@ -318,23 +415,24 @@ class Command(BaseCommand):
         self.stdout.write("="*60 + "\n")
 
         with transaction.atomic():
-            Listing.objects.create(
+            listing = Listing.objects.create(
                 title=titlu[:255],
                 description=descriere,
                 price=pret_curat,
                 currency=moneda_finala,
                 city=oras_final,
-                neighborhood=cartier_final if cartier_final else oras_final,
+                neighborhood=cartier_final if (cartier_final and cartier_final != "Zona Generala") else "Zona Generala",
                 source_url=url,
                 source_website="OLX.ro",
                 latitude=lat_extras,
                 longitude=lng_extras,
-                processing_status='PROCESSED',
+                processing_status='PENDING',
                 rooms=camere,
                 floor=etaj,
                 useful_surface=suprafata,
+                construction_year=an_constructie,
                 partitioning="decomandat" if "decomandat" in text_total else "semidecomandat",
-                furnishing_state="mobilat" if check_feat(["mobilat", "utilat"]) else "nemobilat",
+                furnishing_state="mobilat" if check_feat(["mobilat", "utilat", "utila", "mobilata", "canapea", "pat "]) else "nemobilat",
                 has_fridge=check_feat(["frigider", "combina"]),
                 has_washing_machine=check_feat(["masina de spalat", "mașină spălat"]),
                 has_ac=check_feat(["aer conditionat", " ac ", "climatizare"]),
@@ -342,11 +440,19 @@ class Command(BaseCommand):
                 is_pet_friendly=check_feat(["accepta animale", "pet friendly"]),
                 raw_data={
                     "site_title": titlu,
-                    "site_price": f"{pret_curat} {currency}" if pret_curat else "N/A",
+                    "site_price": pret_afisaj_curat,
                     "site_location": locatie_completa,
                     "site_description": descriere,
+                    "site_specs": specs_brute,
                     "site_images": list(set(imagini_brute)),
                     "scraped_at": time.strftime("%Y-%m-%d %H:%M:%S")
                 }
             )
+
+        try:
+            from django.core.management import call_command
+            call_command('normalize_listings', listing_id=listing.id)
+        except Exception as e_elt:
+            self.stdout.write(self.style.ERROR(f"   ⚠️ Eșec la execuția normalizării: {e_elt}"))
+
         return True
