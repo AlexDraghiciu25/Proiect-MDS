@@ -44,7 +44,7 @@ Sistemul este structurat pe patru straturi logice:
 
 ### 🔹 Sprint 4: Finalization & Testing
 - [✓] Generarea raportului de încredere (Onestitate + Lifestyle).
-- [ ] Testare unitară (Unit Testing) și documentație finală.
+- [✓] Testare unitară (Unit Testing) și documentație finală.
 
 ---
 
