@@ -81,8 +81,8 @@ DATABASES = {
         'NAME': os.environ.get('DB_NAME'),
         'USER': os.environ.get('DB_USER'),
         'PASSWORD': os.environ.get('DB_PASSWORD'),
-        'HOST': 'db',      # ← numele serviciului din docker-compose, NU localhost
-        'PORT': '5432',    # ← portul intern Docker, NU 5433
+        'HOST': os.environ.get('DB_HOST', 'db'),      # CI: localhost, Docker: db
+        'PORT': os.environ.get('DB_PORT', '5432'),    # portul PostgreSQL
     }
 }
 

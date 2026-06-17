@@ -1,0 +1,211 @@
+name: Django CI – Testare la Push
+
+on:
+  push:
+    branches: [ main, alex, develop ]
+  pull_request:
+    branches: [ main, alex, develop ]
+
+jobs:
+  # ══════════════════════════════════════════════
+  # JOB 1: TESTE BACKEND
+  # ══════════════════════════════════════════════
+  backend-tests:
+    name: 🔧 Backend – Modele, Views, API, Validare
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: rentguru_db
+          POSTGRES_USER: rentguru_user
+          POSTGRES_PASSWORD: test_password_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rentguru_user -d rentguru_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DEBUG: "True"
+      SECRET_KEY: "ci-test-secret-key-not-for-production"
+      DB_NAME: rentguru_db
+      DB_USER: rentguru_user
+      DB_PASSWORD: test_password_ci
+      DB_HOST: localhost
+      DB_PORT: "5432"
+      GEMINI_API_KEY: "fake-key-for-ci"
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: 📦 Instalare dependințe Python
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: ✅ Django system check
+        run: python manage.py check
+
+      - name: 🗄️ Rulare migrări
+        run: python manage.py migrate
+
+      - name: 🧪 Teste Modele (Listing, Report)
+        run: python manage.py test core.tests.ModelTests --verbosity=2
+
+      - name: 🔐 Teste Autentificare (Register, Login, Logout)
+        run: python manage.py test core.tests.AuthenticationTests --verbosity=2
+
+      - name: 📊 Teste Data Validation (Completeness Score)
+        run: python manage.py test core.tests.DataValidationTests --verbosity=2
+
+      - name: 🌐 Teste Pagini Publice (Home, About, Contact, Search)
+        run: python manage.py test core.tests.PublicPageTests --verbosity=2
+
+      - name: 🔒 Teste Pagini Protejate (History, Analyze, API)
+        run: python manage.py test core.tests.ProtectedPageTests --verbosity=2
+
+  # ══════════════════════════════════════════════
+  # JOB 2: TESTE FRONTEND
+  # ══════════════════════════════════════════════
+  frontend-tests:
+    name: 🎨 Frontend – Template-uri, HTML, CSS, Formulare
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: rentguru_db
+          POSTGRES_USER: rentguru_user
+          POSTGRES_PASSWORD: test_password_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rentguru_user -d rentguru_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DEBUG: "True"
+      SECRET_KEY: "ci-test-secret-key-not-for-production"
+      DB_NAME: rentguru_db
+      DB_USER: rentguru_user
+      DB_PASSWORD: test_password_ci
+      DB_HOST: localhost
+      DB_PORT: "5432"
+      GEMINI_API_KEY: "fake-key-for-ci"
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: 📦 Instalare dependințe Python
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 🗄️ Rulare migrări
+        run: python manage.py migrate
+
+      - name: 📄 Verificare existență template-uri
+        run: |
+          echo "📂 Verificare fișiere template..."
+          templates=(
+            "core/templates/core/home.html"
+            "core/templates/core/about.html"
+            "core/templates/core/contact.html"
+            "core/templates/core/login.html"
+            "core/templates/core/register.html"
+            "core/templates/core/search_results.html"
+            "core/templates/core/result.html"
+            "core/templates/core/history.html"
+            "core/templates/core/loading.html"
+          )
+          missing=0
+          for t in "${templates[@]}"; do
+            if [ -f "$t" ]; then
+              echo "  ✅ $t"
+            else
+              echo "  ❌ LIPSĂ: $t"
+              missing=$((missing + 1))
+            fi
+          done
+          if [ $missing -gt 0 ]; then
+            echo "❌ $missing template-uri lipsesc!"
+            exit 1
+          fi
+          echo "✅ Toate template-urile există."
+
+      - name: 🎨 Verificare existență fișiere CSS
+        run: |
+          echo "🎨 Verificare fișiere CSS..."
+          css_files=(
+            "core/static/css/about.css"
+            "core/static/css/auth.css"
+            "core/static/css/contact.css"
+            "core/static/css/dashboard.css"
+            "core/static/css/history.css"
+            "core/static/css/loading.css"
+            "core/static/css/result.css"
+            "core/static/css/search_results.css"
+          )
+          missing=0
+          for f in "${css_files[@]}"; do
+            if [ -f "$f" ]; then
+              echo "  ✅ $f"
+            else
+              echo "  ❌ LIPSĂ: $f"
+              missing=$((missing + 1))
+            fi
+          done
+          if [ $missing -gt 0 ]; then
+            echo "❌ $missing fișiere CSS lipsesc!"
+            exit 1
+          fi
+          echo "✅ Toate fișierele CSS există."
+
+      - name: 📜 Verificare existență fișiere JavaScript
+        run: |
+          echo "📜 Verificare fișiere JS..."
+          js_files=(
+            "core/static/js/compare_agent.js"
+            "core/static/js/dashboard.js"
+          )
+          missing=0
+          for f in "${js_files[@]}"; do
+            if [ -f "$f" ]; then
+              echo "  ✅ $f"
+            else
+              echo "  ❌ LIPSĂ: $f"
+              missing=$((missing + 1))
+            fi
+          done
+          if [ $missing -gt 0 ]; then
+            echo "❌ $missing fișiere JS lipsesc!"
+            exit 1
+          fi
+          echo "✅ Toate fișierele JS există."
+
+      - name: 📦 Collect static files (validare)
+        run: python manage.py collectstatic --noinput --verbosity=0
+
+      - name: 🧪 Teste Frontend Django (Template rendering, HTML, Forms)
+        run: python manage.py test core.tests.FrontendTests --verbosity=2
