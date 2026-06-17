@@ -506,12 +506,15 @@ class DataValidationTests(TestCase):
 
     def test_missing_heating_subtracts_10(self):
         """Lipsa tipului de încălzire scade scorul cu 10 puncte."""
-        with_heating = {"Heating type": "centrala_proprie"}
-        without_heating = {}
+        base = {
+            "Price": 350, "Currency": "EUR", "City": "București",
+            "Neighborhood": "Militari", "Rooms": 2, "Useful surface": 55,
+        }
+        with_heating = {**base, "Heating type": "centrala_proprie"}
+        without_heating = {**base}
         score_with = calculate_completeness_score(with_heating)['completeness_score']
         score_without = calculate_completeness_score(without_heating)['completeness_score']
-        # Diferența ar trebui sa includă -10 pentru heating
-        self.assertGreater(score_with, score_without)
+        self.assertAlmostEqual(score_with - score_without, 10.0, places=1)
 
     def test_null_values_treated_as_missing(self):
         """Valorile None sunt tratate ca lipsă."""
