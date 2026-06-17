@@ -2,13 +2,14 @@ import os
 import time
 import random
 import json
+import re
 from django.core.management.base import BaseCommand
 from core.models import Listing
 from playwright.sync_api import sync_playwright
 from playwright_stealth import Stealth
 from django.db import transaction
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
+from core.services import MapsAgent
 
 class Command(BaseCommand):
     help = 'Scraper rapid pentru Storia.ro (JSON-first, Parallel Tabs, Resource Blocking)'
@@ -183,26 +184,16 @@ class Command(BaseCommand):
             page.close()
 
     def _proceseaza_pagina(self, page, url):
-        """
-        Logica principală de extragere.
-        Încearcă mai întâi din __NEXT_DATA__ JSON (instantaneu),
-        apoi fallback pe DOM (mai lent, dar sigur).
-        """
-        # === STRATEGIA 1: JSON-FIRST (RAPIDĂ) ===
         json_data = self._extract_next_data(page)
-
-        if json_data:
-            ad_data = json_data.get('props', {}).get('pageProps', {}).get('ad', {})
-
-            if ad_data:
-                result = self._parse_from_json(ad_data, url)
-                if result:
-                    return result
-
-        # === STRATEGIA 2: FALLBACK DOM (dacă JSON-ul lipsește/e schimbat) ===
-        self.stdout.write(self.style.WARNING(f"   JSON indisponibil, fallback DOM: {url[:40]}..."))
-        return self._parse_from_dom(page, url)
-
+        
+        if json_data and isinstance(json_data, dict) and 'props' in json_data:
+            ad_data = json_data.get('props', {}).get('pageProps', {}).get('ad')
+            if ad_data and isinstance(ad_data, dict):
+                if self._parse_from_json(ad_data, url):
+                    return True
+        
+        return bool(self._parse_from_dom(page, url))
+    
     def _extract_next_data(self, page):
         """Extrage JSON-ul __NEXT_DATA__ dacă există."""
         try:
@@ -233,22 +224,32 @@ class Command(BaseCommand):
             location_data = ad_data.get('location', {})
             address = location_data.get('address', {})
             
-            parti_locatie = []
-            for key in ['street', 'district', 'city']:
-                val = address.get(key, {}).get('name', '')
-                if val:
-                    parti_locatie.append(val)
+            city_name = address.get('city', {}).get('name', '')
+            district_name = address.get('district', {}).get('name', '')
+            street_name = address.get('street', {}).get('name', '')
+
+            # Construiește locația afișată
+            parti_locatie = [p for p in [street_name, district_name, city_name] if p]
             locatie = ', '.join(parti_locatie) if parti_locatie else 'N/A'
 
-            # Coordonate GPS
-            lat_extras = None
-            lng_extras = None
-            import re
+            lat_extras, lng_extras = None, None
+            try:
+                json_string = json.dumps(ad_data)
+                lat_match = re.search(r'"latitude":\s*([4][3-8]\.[0-9]+)', json_string)
+                lng_match = re.search(r'"longitude":\s*([2][0-9]\.[0-9]+)', json_string)
+                
+                if lat_match and lng_match:
+                    lat_extras = float(lat_match.group(1))
+                    lng_extras = float(lng_match.group(1))
+                else:
+                    locatie_geocod = f"{district_name + ', ' if district_name else ''}{city_name}"
+                    lat_extras, lng_extras = MapsAgent().get_coordinates(locatie_geocod)
+            except Exception as e:
+                self.stdout.write(self.style.WARNING(f"   GPS eșuat: {e}"))
             
-            # Caută orice latitudine și longitudine validă (de România) ascunsă oriunde în structura JSON a anunțului
             json_string = json.dumps(ad_data)
-            lat_match = re.search(r'"latitude":\s*([0-9]{2}\.[0-9]+)|"lat":\s*([0-9]{2}\.[0-9]+)', json_string)
-            lng_match = re.search(r'"longitude":\s*([0-9]{2}\.[0-9]+)|"lon(?:gitude)?":\s*([0-9]{2}\.[0-9]+)', json_string)
+            lat_match = re.search(r'"latitude":\s*(4[3-8]\.[0-9]+)', json_string)
+            lng_match = re.search(r'"longitude":\s*(2[0-9]\.[0-9]+)', json_string)
             
             if lat_match:
                 lat_extras = float(lat_match.group(1) or lat_match.group(2))
@@ -318,6 +319,8 @@ class Command(BaseCommand):
                         "site_title": titlu,
                         "site_price": pret,
                         "site_location": locatie,
+                        "site_city": city_name,
+                        "site_district": district_name,
                         "site_specs": specs_brute,
                         "site_description": descriere,
                         "site_images": list(set(imagini_brute)),
@@ -372,28 +375,22 @@ class Command(BaseCommand):
             pret = pret_el.inner_text().strip()
 
         locatie = page.evaluate("""function() {
-            // Strategia 1: Breadcrumb-uri Storia (link-uri cu /rezultate/ în href)
-            var breadcrumbs = document.querySelectorAll('a[href*="/rezultate/"]');
-            var parts = [];
-            for(var i=0; i<breadcrumbs.length; i++) {
-                var text = breadcrumbs[i].innerText.trim();
-                if(text.length > 2 && text.length < 80) {
-                    parts.push(text);
-                }
+            // 1. Selector specific pentru Storia.ro (Adresa)
+            const adresa = document.querySelector('[data-cy="adPageAddress"]');
+            if (adresa) return adresa.innerText.trim();
+            
+            // 2. Breadcrumbs (fără "Apartamente", "Case" etc)
+            const nav = document.querySelector('nav[aria-label="Breadcrumb"]');
+            if (nav) {
+                const links = Array.from(nav.querySelectorAll('a'));
+                const filtered = links.filter(a => {
+                    const t = a.innerText.trim();
+                    const noisy = ["Apartamente", "Garsoniere", "Case", "Terenuri", "Birouri", "Inchirieri"];
+                    return t.length > 2 && !noisy.includes(t);
+                });
+                return filtered.slice(-2).map(a => a.innerText.trim()).join(', ');
             }
-            if(parts.length > 0) {
-                return parts.join(', ');
-            }
-            // Strategia 2: Căutăm orice link cu text de locație
-            var links = document.querySelectorAll('a');
-            for(var i=0; i<links.length; i++) {
-                var href = links[i].getAttribute('href') || '';
-                var text = links[i].innerText.trim();
-                if(href.includes('/rezultate/') && text.length > 2 && text.length < 80) {
-                    return text;
-                }
-            }
-            return 'N/A';
+            return 'Bucuresti';
         }""")
 
         # Curățăm locația de linii goale
@@ -500,5 +497,11 @@ class Command(BaseCommand):
                     "scraped_at": time.strftime("%Y-%m-%d %H:%M:%S")
                 }
             )
+
+        try:
+            from django.core.management import call_command
+            call_command('normalize_listings', listing_id=listing.id)
+        except Exception as e:
+            self.stdout.write(self.style.ERROR(f"   Normalizare eșuată: {e}"))
         self.stdout.write(self.style.SUCCESS(f"   Aspirat complet: {titlu[:30]}..."))
         return listing

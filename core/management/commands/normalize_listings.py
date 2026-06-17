@@ -124,7 +124,8 @@ class Command(BaseCommand):
 
             # --- EXTRAGERE NUMERICĂ COMPLEXĂ ---
             
-            pret_curat = None
+            raw_price_str = raw.get("site_price", "")
+            pret_curat = self.normalize_price_to_eur(raw_price_str)
             pret_brut = raw.get("site_price", "").replace(" ", "")
             match_pret = re.search(r'(\d+[\.,]?\d*)', pret_brut)
             if match_pret:

@@ -116,6 +116,15 @@ class Listing(models.Model):
         title_display = self.title if self.title else "Anunț neprocesat"
         return f"[{self.processing_status}] {self.source_website} - {title_display}"
 
+    @property
+    def price_in_eur(self):
+        """Metodă utilitară pentru a garanta că returnăm EUR pentru calcule."""
+        if not self.price:
+            return None
+        if self.currency == 'EUR':
+            return float(self.price)
+        return round(float(self.price) / 4.97, 2)
+
 # 2. MODELUL REPORT 
 class Report(models.Model):
     # --- Relaii ---
