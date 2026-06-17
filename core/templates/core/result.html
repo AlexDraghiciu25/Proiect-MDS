@@ -130,12 +130,13 @@
                 </div>
 
                 <!-- Red Flags + Proximitate -->
-                <div class="row g-4 align-items-stretch">
+                <div class="row g-4 align-items-start">
 
                     <!-- Red Flags -->
                     <div class="col-md-6">
-                        <div class="rg-card h-100" style="animation-delay:.22s">
+                        <div class="rg-card" style="animation-delay:.22s">
                             <div class="rg-card-title"><i class="bi bi-exclamation-triangle"></i> Atenționări</div>
+                            <div class="flags-scroll">
                             {% if report.red_flags %}
                                 {% for flag in report.red_flags %}
                                     {% if flag|slice:":5" == "BAZA:" %}
@@ -163,12 +164,13 @@
                                     <i class="bi bi-check-circle-fill"></i> Nicio problemă detectată
                                 </div>
                             {% endif %}
+                            </div>
                         </div>
                     </div>
 
                     <!-- Proximitate -->
                     <div class="col-md-6">
-                        <div class="rg-card h-100" style="animation-delay:.27s">
+                        <div class="rg-card" style="animation-delay:.27s">
                             <div class="rg-card-title"><i class="bi bi-geo-alt-fill"></i> Cartier & Proximitate</div>
                             {% if report.proximity_analysis %}
                                 <p class="proximity-text">{{ report.proximity_analysis }}</p>

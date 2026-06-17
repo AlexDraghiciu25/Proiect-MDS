@@ -576,6 +576,14 @@ class DetectiveAgent:
 
         data = gemini_result[0]
 
+        # ── Suprascriem difference_percentage cu valoarea calculată programatic ──
+        # Gemini poate returna un procent care contrazice propriul label; folosim
+        # valoarea reală calculată din DB (sau None dacă nu avem date).
+        if data.get('price_analysis') and isinstance(data['price_analysis'], dict):
+            if pret_mediu_mp and listing.price and listing.useful_surface:
+                data['price_analysis']['difference_percentage'] = diff_pct
+                data['price_analysis']['average_zone_price'] = pret_mediu_mp
+
         # ── FAZA 3: Aplicăm flag-uri pentru distanțe exagerate, DAR FĂRĂ SĂ SCĂDEM SCORUL ──
         distance_verification_results = []
         score_adjustment = 0
