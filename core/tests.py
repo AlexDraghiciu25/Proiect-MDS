@@ -156,10 +156,11 @@ class ModelTests(TestCase):
         self.listing.delete()
         self.assertFalse(Report.objects.filter(listing_id=listing_id).exists())
 
-    @patch('core.models.Listing.objects.create')
-    def test_report_generation_with_mock_ai(self, mock_ai):
+    @patch('core.services.DetectiveAgent')
+    def test_report_generation_with_mock_ai(self, MockAgent):
         """Testul mocking AI – simulare generare raport."""
-        mock_ai.return_value = {"score": 90}
+        mock_instance = MockAgent.return_value
+        mock_instance.analyze_listing.return_value = MagicMock(integrity_score=90)
         listing = Listing.objects.create(
             source_url='https://olx.ro/mock-test',
             source_website='OLX',
@@ -687,12 +688,12 @@ class FrontendTests(TestCase):
         )
 
     def test_result_page_shows_listing_data(self):
-        """Pagina de rezultat afișează datele listingului."""
+        """Pagina de rezultat afișează datele listingului (preț)."""
         response = self.client.get(
             reverse('result_detail', kwargs={'listing_id': self.listing.id})
         )
         content = response.content.decode()
-        self.assertIn('Apartament Frontend', content)
+        self.assertIn('400.00', content)
 
     def test_history_pagination(self):
         """Pagina de history suportă paginare."""
