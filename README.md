@@ -8,8 +8,10 @@
 * **Backend:** Python 3.x cu framework-ul **Django**.
 * **Bază de date:** **PostgreSQL** (pentru persistența utilizatorilor, istoricului și rapoartelor).
 * **Frontend:** Django Templates + Bootstrap.
-* **AI/ML:** OpenAI API (GPT-4) / LangChain pentru coordonarea agenților.
-* **Geospatial:** Google Maps Platform API / OpenStreetMap.
+* **AI/ML:** Gemini-3.1-flash-lite.
+* **Geospatial:** Ecosistemul OpenStreetMap
+  * **Nominatim API:** Utilizat pentru geocodarea adreselor anunțurilor imobiliare.
+  * **Overpass API:** Utilizat pentru interogări spațiale avansate (ex: calcularea distanțelor până la punctele de interes, verificarea facilităților din zonă).
 * **Data Acquisition:** Playwright.
 
 ---
@@ -57,8 +59,8 @@ Acest grafic descrie interacțiunea dintre serverul Django, baza de date Postgre
 graph TD;
     UI[Frontend: Django Templates + Bootstrap] -- URL/Filtre --> Django[Backend: Django Framework];
     Django -- Persistență --> DB[(Database: PostgreSQL)];
-    Django -- Web Scraping --> Web[Site-uri Imobiliare: OLX/Imobiliare.ro];
-    Django -- Prompt Contextual --> AI[AI Layer: OpenAI GPT-4 / LangChain];
+    Django -- Web Scraping --> Web[Site-uri Imobiliare: OLX/Storia.ro];
+    Django -- Prompt Contextual --> AI[AI Layer: Gemini-3.1-flash-lite];
     Django -- Analiză Geospațială --> Maps[Geospatial: Google Maps API];
     AI -- Scor Integritate --> Django;
     Maps -- Validare Distanțe --> Django;
